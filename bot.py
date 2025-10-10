@@ -81,11 +81,14 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     if not TOKEN:
-        raise RuntimeError("Falta la variable de entorno TOKEN")
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
-    app.run_polling()
+        raise RuntimeError("Falta la variable de entorno TOKEN (posa-la a Secrets)")
+
+    keep_alive()
+
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
