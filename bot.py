@@ -3,32 +3,38 @@ from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, Con
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
 from datetime import datetime
-import pytz
-import os
 from flask import Flask
 from threading import Thread
+import pytz
 import os
 
-app = Flask(__name__)
+# ====== KEEP ALIVE (Replit) ======
+app_web = Flask(__name__)
 
-@app.route("/")
+@app_web.route("/")
 def home():
     return "I'm alive"
 
 def _run():
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
+    # Replit sol usar el port 8080; si no existeix, fem servir 8080 igualment
+    port = int(os.getenv("PORT", "8080"))
+    print(f"[keep_alive] Engegant Flask a {port}…")
+    app_web.run(host="0.0.0.0", port=port)
 
 def keep_alive():
     t = Thread(target=_run, daemon=True)
     t.start()
+# ====== FI KEEP ALIVE ======
 
+# Token via variable d'entorn (NO el posis en clar)
 TOKEN = os.getenv("TOKEN")
 
-geolocator = Nominatim(user_agent="telegram-bot")
+# Geocodificador + zona horària
+geolocator = Nominatim(user_agent="telegram-timebot")
 tf = TimezoneFinder()
 
 def flag_for(country_code: str) -> str:
-    """Converteix codi ISO-3166-1 alpha-2 (ES, MX, JP...) a emoji de bandera."""
+    """Converteix codi ISO-3166-1 (ES, MX, JP...) a emoji de bandera."""
     if not country_code or len(country_code) != 2 or not country_code.isalpha():
         return ""
     cc = country_code.upper()
@@ -81,13 +87,14 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     if not TOKEN:
-        raise RuntimeError("Falta la variable de entorno TOKEN (posa-la a Secrets)")
-
+        raise RuntimeError("Falta la variable de entorno TOKEN (posa-la a Secrets/Environment)")
+    # Mantén viu el Repl per UptimeRobot
     keep_alive()
-
+    # Arrenca el bot
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
+    print("[bot] Iniciant polling…")
     application.run_polling()
 
 if __name__ == "__main__":
