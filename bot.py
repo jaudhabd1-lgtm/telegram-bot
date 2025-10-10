@@ -5,8 +5,23 @@ from timezonefinder import TimezoneFinder
 from datetime import datetime
 import pytz
 import os
+from flask import Flask
+from threading import Thread
+import os
 
-# Agafa el token de les variables d'entorn (no el posis en clar al codi)
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "I'm alive"
+
+def _run():
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
+
+def keep_alive():
+    t = Thread(target=_run, daemon=True)
+    t.start()
+
 TOKEN = os.getenv("TOKEN")
 
 geolocator = Nominatim(user_agent="telegram-bot")
