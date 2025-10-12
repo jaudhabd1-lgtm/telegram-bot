@@ -7,7 +7,7 @@ import country_converter as coco
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatType
-from telegram.error import BadRequest, RetryAfter
+from telegram.error import BadRequest
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, filters
@@ -17,9 +17,8 @@ from telegram.ext import (
 # CONFIGURACIÓN GENERAL
 # =========================
 TOKEN = os.getenv("TOKEN")
-DATA_DIR = os.getenv("DATA_DIR", ".")
-ROSTER_FILE = os.path.join(DATA_DIR, "roster.json")
-SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
+ROSTER_FILE = "roster.json"
+SETTINGS_FILE = "settings.json"
 
 # =========================
 # ESTADO EN MEMORIA
@@ -37,8 +36,6 @@ TTT_X = "❌"
 TTT_O = "⭕"
 
 logging.basicConfig(level=logging.INFO)
-# Silencia el soroll d'httpx
-logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # =========================
 # SETTINGS (por chat)
@@ -118,22 +115,12 @@ async def safe_q_answer(q, text: str | None = None, show_alert: bool = False):
     except Exception:
         pass
 
-# Helper per gestionar floodwait a send_message
-
-
+# NUEVO: helper para deep-link y nombre del bot
 async def _bot_username(context: ContextTypes.DEFAULT_TYPE) -> str:
     if getattr(context.bot, "username", None):
         return context.bot.username
     me = await context.bot.get_me()
     return me.username
-async def _safe_send(bot, chat_id: int, **kwargs):
-    while True:
-        try:
-            return await bot.send_message(chat_id=chat_id, **kwargs)
-        except RetryAfter as e:
-            await asyncio.sleep(float(getattr(e, "retry_after", 1.0)))
-        except Exception:
-            raise
 
 # =========================
 # ROSTER
@@ -159,34 +146,44 @@ def upsert_roster_member(chat_id: int, user) -> None:
     key = str(chat_id)
     chat_data = roster.get(key, {})
     uid = str(user.id)
-
-    rec = chat_data.get(uid, {})
-    rec["first_name"] = user.first_name or ""
-    rec["username"] = (user.username or "").lower()  # sense @
-    rec["is_bot"] = bool(user.is_bot)
-    rec["last_ts"] = time.time()
-    rec["messages"] = int(rec.get("messages", 0)) + 1
-
-    chat_data[uid] = rec
+    name = user.first_name or user.username or "Usuario"
+    if uid not in chat_data:
+        chat_data[uid] = {"name": name, "last_ts": time.time(), "messages": 1}
+    else:
+        chat_data[uid]["name"] = name
+        chat_data[uid]["last_ts"] = time.time()
+        chat_data[uid]["messages"] = chat_data[uid].get("messages", 0) + 1
     roster[key] = chat_data
     save_roster(roster)
 
 def get_chat_roster(chat_id: int) -> List[dict]:
     roster = load_roster()
-    data = roster.get(str(chat_id), {})
-    out = []
+    data = roster.get(str(chat_id))
+    if not data or not isinstance(data, dict):
+        return []
+    norm = []
     for uid_str, info in data.items():
         try:
             uid = int(uid_str)
         except Exception:
             continue
-        out.append({
+        raw_name = str(info.get("name") or "").strip() or "usuario"
+        nm = raw_name.lower()
+        is_bot = any([
+            nm.endswith("_bot"),
+            " bot" in nm,
+            nm.startswith("@missrose_bot"),
+            nm.startswith("@chatfightbot"),
+            nm.startswith("@linemusicbot")
+        ])
+        username = raw_name[1:].lower() if raw_name.startswith("@") else ""
+        norm.append({
             "id": uid,
-            "first_name": (info.get("first_name") or "").strip() or "usuario",
-            "username": (info.get("username") or "").strip(),  # sense @
-            "is_bot": bool(info.get("is_bot", False)),
+            "first_name": raw_name,
+            "username": username,
+            "is_bot": is_bot
         })
-    return out
+    return norm
 
 def _display_name(u: dict) -> str:
     name = (u.get("first_name") or u.get("username") or "usuario").strip()
@@ -261,13 +258,13 @@ def txt_help_triggers(spooky: bool) -> str:
     if spooky:
         return ("\n\nAtajos sin barra (informativo):\n"
                 "brb / afk — activa afk (desapareces entre la niebla)\n"
-                "hora [país] — hora del país (por defecto españa)\n"
-                "@all [motivo] — (solo admin) invocar a todas las almas\n"
+                "hora [país] — hora del país (por defecto España)\n"
+                "🛡️ @all [motivo] — invocar a todas las almas\n"
                 "@admin [motivo] — llamar al aquelarre de administradores")
     return ("\n\nAtajos sin barra (informativo):\n"
             "brb / afk — activa afk\n"
-            "hora [país] — hora del país (por defecto españa)\n"
-            "@all [motivo] — (solo admin) mencionar a todos\n"
+            "hora [país] — hora del país (por defecto España)\n"
+            "🛡️ @all [motivo] — mencionar a todos\n"
             "@admin [motivo] — avisar solo a administradores")
 
 def txt_all_perm(spooky: bool) -> str:
@@ -417,7 +414,6 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
 # =========================
 # START / HELP / HALLOWEEN
 # =========================
-
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     spooky = is_spooky(msg.chat.id)
@@ -437,14 +433,6 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(text, reply_markup=kb)
     else:
         await msg.reply_text(txt_start_group(spooky))
-    spooky = is_spooky(msg.chat.id)
-    if msg.chat.type == ChatType.PRIVATE:
-        text = txt_start_private(spooky)
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📖 Ver comandos", callback_data="show_help")]])
-        await msg.reply_text(text, reply_markup=kb)
-    else:
-        await msg.reply_text(txt_start_group(spooky))
-
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -460,9 +448,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"https://t.me/{username}?start=help"
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
         m = await msg.reply_text(text, reply_markup=kb, disable_web_page_preview=True)
-        # Borramos el mensaje al cabo de 20s para no hacer ruido
+        # Borrar en 20s para no ensuciar el chat
         try:
-            import asyncio
             async def _del():
                 await asyncio.sleep(20)
                 try:
@@ -492,12 +479,9 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await safe_q_answer(q)
+    # Reutiliza help_cmd para mantener formato
     fake_update = Update(update.update_id, message=q.message)
     await help_cmd(fake_update, context)
-    spooky = is_spooky(q.message.chat.id)
-    await safe_q_answer(q)
-    text = format_commands_list_botfather()
-    await q.edit_message_text(text + txt_help_triggers(spooky))
 
 async def halloween_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -581,6 +565,9 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
 # =========================
 async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    # SOLO ADMIN
+    if not await is_admin(context, msg.chat.id, msg.from_user.id):
+        return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
     spooky = is_spooky(chat.id)
 
@@ -606,7 +593,8 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roster = load_roster().get(str(chat.id), {})
         uid = None
         for uid_str, info in roster.items():
-            if (info.get("username") or "").lower() == username:
+            name = str(info.get("name") or "").strip()
+            if name.startswith("@") and name[1:].lower() == username:
                 uid = int(uid_str); break
         if uid is None:
             await msg.reply_text(txt_autoresp_not_found(spooky))
@@ -621,6 +609,9 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    # SOLO ADMIN
+    if not await is_admin(context, msg.chat.id, msg.from_user.id):
+        return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
     spooky = is_spooky(chat.id)
     target_user = None
@@ -632,7 +623,8 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
         roster = load_roster().get(str(chat.id), {})
         uid = None
         for uid_str, info in roster.items():
-            if (info.get("username") or "").lower() == username:
+            name = str(info.get("name") or "").strip()
+            if name.startswith("@") and name[1:].lower() == username:
                 uid = int(uid_str); break
         if uid is None:
             return await msg.reply_text(txt_autoresp_not_found(spooky))
@@ -740,14 +732,14 @@ async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_u
     spooky = is_spooky(chat.id)
     members = get_chat_roster(chat.id)
     if not members:
-        await _safe_send(context.bot, chat.id, text=txt_no_users(spooky)); return
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_users(spooky)); return
     parts = build_mentions_html(members)
     if not parts:
-        await _safe_send(context.bot, chat.id, text=txt_no_targets(spooky)); return
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets(spooky)); return
 
     header = txt_all_header(spooky, by_user.first_name, extra)
     try:
-        await _safe_send(context.bot, chat.id, text=header)
+        await context.bot.send_message(chat_id=chat.id, text=header)
     except Exception as e:
         logging.exception("Fallo cabecera @all", exc_info=e)
 
@@ -755,8 +747,8 @@ async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_u
     for block in parts:
         try:
             body = block + motivo_html
-            await _safe_send(context.bot, chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
-            await asyncio.sleep(0.2)
+            await context.bot.send_message(chat_id=chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
+            await asyncio.sleep(0.3)
         except Exception as e:
             logging.exception("Fallo bloque @all", exc_info=e)
     _last_all[chat.id] = time.time()
@@ -794,6 +786,9 @@ async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    # SOLO ADMIN
+    if not await is_admin(context, msg.chat.id, msg.from_user.id):
+        return await msg.reply_text("Este comando es solo para administradores.")
     spooky = is_spooky(msg.chat.id)
     context.user_data.pop("pending_all", None)
     context.user_data.pop("pending_admin", None)
@@ -874,19 +869,19 @@ async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by
     spooky = is_spooky(chat.id)
     admins = await _get_admin_members(chat, context)
     if not admins:
-        return await _safe_send(context.bot, chat.id, text=txt_no_admins(spooky))
+        return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins(spooky))
     parts = _build_mentions_html_from_basic(admins)
     header = txt_admin_header(spooky, by_user.first_name, extra)
     try:
-        await _safe_send(context.bot, chat.id, text=header)
+        await context.bot.send_message(chat_id=chat.id, text=header)
     except Exception as e:
         logging.exception("Fallo cabecera @admin", exc_info=e)
     motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
     for block in parts:
         try:
             body = block + motivo_html
-            await _safe_send(context.bot, chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
-            await asyncio.sleep(0.2)
+            await context.bot.send_message(chat_id=chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
+            await asyncio.sleep(0.3)
         except Exception as e:
             logging.exception("Fallo bloque @admin", exc_info=e)
     _admin_last[chat.id] = time.time()
@@ -1106,7 +1101,8 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         roster = load_roster().get(str(chat.id), {})
         uid = None
         for uid_str, info in roster.items():
-            if (info.get("username") or "").lower() == username:
+            name = str(info.get("name") or "").strip()
+            if name.startswith("@") and name[1:].lower() == username:
                 uid = int(uid_str); break
         if uid:
             member = await context.bot.get_chat_member(chat.id, uid)
@@ -1387,14 +1383,14 @@ def main():
     # /help dinámico (formato BotFather)
     register_command("start", "muestra el mensaje de bienvenida del bot")
     register_command("help", "lista los comandos disponibles")
-    register_command("halloween", "activa o desactiva el modo halloween (on/off/status)")
+    register_command("halloween", "activa o desactiva el modo halloween (on/off/status)", admin=True)
     register_command("afk", "activa el modo afk con un motivo opcional")
-    register_command("autoresponder", "activa una respuesta automática para un usuario")
-    register_command("autoresponder_off", "desactiva el autoresponder de un usuario")
+    register_command("autoresponder", "activa una respuesta automática para un usuario", admin=True)
+    register_command("autoresponder_off", "desactiva el autoresponder de un usuario", admin=True)
     register_command("hora", "muestra la hora actual del país indicado (por defecto españa)")
     register_command("all", "menciona a todos los miembros del grupo con un motivo opcional", admin=True)
     register_command("admin", "menciona solo a los administradores con un motivo opcional")
-    register_command("cancel", "cancela una acción pendiente (confirmaciones @all/@admin)")
+    register_command("cancel", "cancela una acción pendiente (confirmaciones @all/@admin)", admin=True)
     register_command("ttt", "inicia una partida de tres en raya (responde a alguien o usa @usuario opcionalmente)")
     register_command("tres", "alias de /ttt para iniciar tres en raya")
     register_command("top_ttt", "muestra el ranking de tres en raya (wins/draws/losses)")
