@@ -1,0 +1,20 @@
+services:
+  - type: worker
+    name: ruru-bot
+    env: python
+    region: frankfurt
+    plan: starter          # worker 24/7 baratet
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    disk:
+      name: ruru-data
+      mountPath: /data
+      sizeGB: 1            # amb 1GB en tens de sobres
+    envVars:
+      - key: TOKEN         # posaràs el secret a la UI
+        sync: false
+      - key: DATA_DIR
+        value: /data
+      - key: TZ
+        value: Europe/Madrid
