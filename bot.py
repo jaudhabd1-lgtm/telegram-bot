@@ -4,6 +4,48 @@ from typing import List, Dict, Any
 from zoneinfo import ZoneInfo
 import pytz
 import country_converter as coco
+import os, json, shutil, hashlib
+
+DATA_DIR = os.getenv("DATA_DIR", ".")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+FORCE_IMPORT = os.getenv("FORCE_IMPORT", "0") == "1"
+
+SEED_FILES = ["settings.json", "roster.json"]
+
+def _sha256(path: str) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f: h.update(f.read())
+    return h.hexdigest()
+
+for name in SEED_FILES:
+    src = name
+    dst = os.path.join(DATA_DIR, name)
+    if not os.path.exists(src):
+        print(f"ℹ️ No trobo {src} (s'omet).")
+        continue
+
+    need_copy = FORCE_IMPORT or not os.path.exists(dst)
+    if not need_copy and os.path.exists(dst):
+        try:
+            if _sha256(src) != _sha256(dst):
+                need_copy = True
+        except Exception:
+            need_copy = True
+
+    if need_copy:
+        try:
+            with open(src, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            with open(dst, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"✅ Importat {src} → {dst}")
+        except Exception as e:
+            print(f"❌ Error important {src}: {e}")
+    else:
+        print(f"ℹ️ Mantinc {dst} (igual que {src}). Usa FORCE_IMPORT=1 per forçar.")
+
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatType
