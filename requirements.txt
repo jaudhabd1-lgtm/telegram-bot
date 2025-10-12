@@ -1,5 +1,0 @@
-python-telegram-bot==20.3
-geopy==2.4.1
-timezonefinder==6.5.2
-pytz
-Flask
