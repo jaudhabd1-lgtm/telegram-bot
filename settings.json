@@ -1,0 +1,61 @@
+{
+  "-1002996169471": {
+    "all_enabled": true,
+    "afk_enabled": true,
+    "daily_top_enabled": false,
+    "auto_reply": {
+      "enabled": false
+    },
+    "halloween": true
+  },
+  "-1003038378802": {
+    "all_enabled": true,
+    "afk_enabled": true,
+    "auto_reply": {
+      "enabled": true
+    },
+    "all_summary": true,
+    "all_confirm": true,
+    "daily_top_enabled": true
+  },
+  "_ttt_stats": {
+    "-1002996169471": {
+      "13091282": {
+        "name": "𝐑𝐔𝐑𝐔",
+        "wins": 5,
+        "draws": 5,
+        "losses": 1
+      },
+      "8491422406": {
+        "name": "𝕻𝖔𝖑𝖊𝖙𝖊 🐺✨",
+        "wins": 0,
+        "draws": 1,
+        "losses": 1
+      },
+      "7535853709": {
+        "name": "𝙄𝙖𝙣",
+        "wins": 2,
+        "draws": 7,
+        "losses": 1
+      },
+      "8300697228": {
+        "name": "𝖙𝖚 𝖌𝖚𝖆𝖕𝖔 😴😘",
+        "wins": 0,
+        "draws": 0,
+        "losses": 1
+      },
+      "7627332082": {
+        "name": "­J",
+        "wins": 0,
+        "draws": 3,
+        "losses": 1
+      },
+      "8446266547": {
+        "name": ".",
+        "wins": 0,
+        "draws": 0,
+        "losses": 2
+      }
+    }
+  }
+}
