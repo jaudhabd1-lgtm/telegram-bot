@@ -119,6 +119,13 @@ async def safe_q_answer(q, text: str | None = None, show_alert: bool = False):
         pass
 
 # Helper per gestionar floodwait a send_message
+
+
+async def _bot_username(context: ContextTypes.DEFAULT_TYPE) -> str:
+    if getattr(context.bot, "username", None):
+        return context.bot.username
+    me = await context.bot.get_me()
+    return me.username
 async def _safe_send(bot, chat_id: int, **kwargs):
     while True:
         try:
@@ -410,8 +417,26 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
 # =========================
 # START / HELP / HALLOWEEN
 # =========================
+
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    spooky = is_spooky(msg.chat.id)
+
+    # Deep link: t.me/<bot>?start=help → muestra la ayuda directamente
+    if context.args and context.args[0].lower() == "help":
+        if msg.chat.type != ChatType.PRIVATE:
+            username = await _bot_username(context)
+            url = f"https://t.me/{username}?start=help"
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
+            return await msg.reply_text("📬 Contáctame en privado para ver la ayuda.", reply_markup=kb)
+        return await help_cmd(update, context)
+
+    if msg.chat.type == ChatType.PRIVATE:
+        text = txt_start_private(spooky)
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📖 Ver comandos", callback_data="show_help")]])
+        await msg.reply_text(text, reply_markup=kb)
+    else:
+        await msg.reply_text(txt_start_group(spooky))
     spooky = is_spooky(msg.chat.id)
     if msg.chat.type == ChatType.PRIVATE:
         text = txt_start_private(spooky)
@@ -420,14 +445,64 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await msg.reply_text(txt_start_group(spooky))
 
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    chat = msg.chat
+    spooky = is_spooky(chat.id)
+
+    # En grupos: redirigir a privado con botón y autodestrucción
+    if chat.type != ChatType.PRIVATE:
+        username = await _bot_username(context)
+        text = ("🎯 Contáctame en privado para ver la ayuda completa."
+                if spooky else
+                "📬 Contáctame en privado para ver la ayuda completa.")
+        url = f"https://t.me/{username}?start=help"
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
+        m = await msg.reply_text(text, reply_markup=kb, disable_web_page_preview=True)
+        # Borramos el mensaje al cabo de 20s para no hacer ruido
+        try:
+            import asyncio
+            async def _del():
+                await asyncio.sleep(20)
+                try:
+                    await m.delete()
+                except:
+                    pass
+            asyncio.create_task(_del())
+        except Exception:
+            pass
+        return
+
+    # En privado: ayuda completa (formato elegante)
+    header = "🎃 <b>Hechizos disponibles</b>
+" if spooky else "🐸 <b>Comandos disponibles</b>
+"
+    desc = (
+        "<i>Usa los comandos con / y algunos atajos sin barra como</i> "
+        "<code>afk</code>, <code>hora México</code> o <code>@all</code>.
+
+"
+    )
+
+    lines = []
+    for name, info in sorted(COMMANDS.items()):
+        admin_tag = "🛡️ " if info.get("admin") else "• "
+        lines.append(f"{admin_tag}<b>/{name}</b> — {html.escape(info.get('desc'))}")
+
+    text = header + desc + "
+".join(lines) + txt_help_triggers(spooky)
+    await msg.reply_text(text, parse_mode="HTML", disable_web_page_preview=True)
     spooky = is_spooky(msg.chat.id)
     text = format_commands_list_botfather()
     await msg.reply_text(text + txt_help_triggers(spooky))
 
+
 async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    await safe_q_answer(q)
+    fake_update = Update(update.update_id, message=q.message)
+    await help_cmd(fake_update, context)
     spooky = is_spooky(q.message.chat.id)
     await safe_q_answer(q)
     text = format_commands_list_botfather()
