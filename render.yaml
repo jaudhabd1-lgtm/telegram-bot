@@ -6,7 +6,7 @@ services:
     plan: starter          # worker 24/7 baratet
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    startCommand: python bot.py
     disk:
       name: ruru-data
       mountPath: /data
