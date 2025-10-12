@@ -475,14 +475,10 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # En privado: ayuda completa (formato elegante)
-    header = "🎃 <b>Hechizos disponibles</b>
-" if spooky else "🐸 <b>Comandos disponibles</b>
-"
+    header = "🎃 <b>Hechizos disponibles</b>\\n" if spooky else "🐸 <b>Comandos disponibles</b>\\n"
     desc = (
         "<i>Usa los comandos con / y algunos atajos sin barra como</i> "
-        "<code>afk</code>, <code>hora México</code> o <code>@all</code>.
-
-"
+        "<code>afk</code>, <code>hora México</code> o <code>@all</code>.\\n\\n"
     )
 
     lines = []
@@ -490,13 +486,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_tag = "🛡️ " if info.get("admin") else "• "
         lines.append(f"{admin_tag}<b>/{name}</b> — {html.escape(info.get('desc'))}")
 
-    text = header + desc + "
-".join(lines) + txt_help_triggers(spooky)
+    text = header + desc + "\\n".join(lines) + txt_help_triggers(spooky)
     await msg.reply_text(text, parse_mode="HTML", disable_web_page_preview=True)
-    spooky = is_spooky(msg.chat.id)
-    text = format_commands_list_botfather()
-    await msg.reply_text(text + txt_help_triggers(spooky))
-
 
 async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
