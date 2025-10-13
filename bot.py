@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-# bot.py — Telegram bot (PTB v21) con @all confirmado, caché de admins, cooldowns
-# y guardado de settings/roster con debounce.
-# Español en mensajes y comentarios, como se solicitó.
-
 import os, json, time, random, asyncio, logging, re, html, unicodedata, threading
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
@@ -14,7 +9,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
+    Application, ApplicationBuilder, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, filters
 )
 
@@ -1402,11 +1397,20 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.exception("Unhandled exception", exc_info=context.error)
 
+
+# =========================
+# POST INIT (JobQueue setup)
+# =========================
+async def _post_init(application: Application) -> None:
+    # Jobs periódicos para persistencia (cada 30 s)
+    application.job_queue.run_repeating(flush_settings_debounced_job, interval=30, first=30)
+    application.job_queue.run_repeating(flush_roster_debounced_job, interval=30, first=30)
+
 # =========================
 # MAIN
 # =========================
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(TOKEN).post_init(_post_init).build()
 
     # START / HELP / HALLOWEEN
     app.add_handler(CommandHandler("start", start_cmd))
@@ -1465,10 +1469,6 @@ def main():
 
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
-
-    # Jobs periódicos para persistencia (cada 30 s)
-    app.job_queue.run_repeating(flush_settings_debounced_job, interval=30, first=30)
-    app.job_queue.run_repeating(flush_roster_debounced_job, interval=30, first=30)
 
     app.run_polling()
 
