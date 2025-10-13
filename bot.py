@@ -75,31 +75,71 @@ def is_spooky(cid: int) -> bool:
 
 # Frases AFK (modo normal y modo Halloween)
 AFK_PHRASES_NORMAL = [
-"Estado AFK activado. No disponible por ahora.",
-"Se activa el modo ausente. Volverá cuando pueda.",
-"AFK: no responde en este momento.",
+    "💬 Estado AFK activado: el usuario está ausente.",
+    "🚪 El usuario se ha alejado del teclado.",
+    "💤 El usuario no está disponible en este momento.",
+    "🔕 Se ha activado el modo AFK.",
+    "⌨️ El teclado ha quedado sin dueño por ahora.",
+    "☕ Descanso temporal registrado.",
+    "🕐 Sin respuesta: ausencia detectada.",
+    "🌙 Modo ausente en curso.",
+    "🪑 Se registra ausencia en el sistema.",
+    "🕸️ Pausa iniciada: no se garantiza respuesta inmediata.",
+    "🔇 Usuario inactivo.",
+    "⏸️ Estado AFK: pausa momentánea."
 ]
+
 
 
 AFK_RETURN_NORMAL = [
-"Fin del modo AFK: ya está de vuelta.",
-"Regreso detectado: operativo otra vez.",
-"AFK desactivado: disponible de nuevo.",
+    "🎉 Regreso confirmado: el usuario ha vuelto.",
+    "🔓 Modo AFK desactivado.",
+    "👋 El usuario vuelve a estar disponible.",
+    "🚀 Actividad retomada con éxito.",
+    "💫 Fin de la ausencia: regreso completado.",
+    "🔁 Usuario reincorporado al chat.",
+    "⚡ Conectividad restablecida.",
+    "✅ Estado operativo reactivado.",
+    "🧩 Sesión reanudada.",
+    "🔔 El usuario ha vuelto del modo AFK.",
+    "💬 Presencia detectada nuevamente.",
+    "📶 Señal restablecida: usuario activo."
 ]
+
 
 
 AFK_PHRASES_SPOOKY = [
-"👻 AFK espectral activo. Ha desaparecido entre la niebla.",
-"🕯️ Ritual de ausencia iniciado. Las sombras responden por él.",
-"🎃 Silencio embrujado: no está disponible ahora mismo.",
+    "🌒 El alma del usuario se desvanece entre sombras.",
+    "🕷️ El usuario ha sido reclamado por la oscuridad.",
+    "🕯️ Un velo cubre la presencia de este ser.",
+    "👻 Silencio espectral: el usuario ha desaparecido.",
+    "⚰️ El teclado queda abandonado, el eco responde solo.",
+    "🔮 Portal cerrado: el usuario se ha perdido en la niebla.",
+    "🌫️ Las sombras se apoderan del chat.",
+    "🕸️ La cripta se abre y el usuario desciende a la ausencia.",
+    "🦴 Maldición activa: silencio absoluto.",
+    "🕯️ Se ha ofrecido la voz al más allá.",
+    "🦇 Marca nocturna: el usuario se oculta entre tinieblas.",
+    "🌑 El farol se apaga; solo queda la oscuridad."
 ]
+
 
 
 AFK_RETURN_SPOOKY = [
-"🕯️ El portal se cierra: ha regresado.",
-"🎃 Vuelve de entre las sombras: AFK desactivado.",
-"👻 Aparición completa: operativo otra vez.",
+    "🪄 Resurrección detectada: el ausente ha regresado.",
+    "🌕 Se rompe el hechizo: el alma vuelve al chat.",
+    "🧟‍♂️ Una figura emerge de las sombras.",
+    "🕯️ El silencio sepulcral ha terminado.",
+    "⚡ Regreso desde el inframundo completado.",
+    "🌘 El espectro reaparece con la primera luz.",
+    "⏳ Ascenso desde el más allá confirmado.",
+    "🕸️ La maldición se disipa; la voz retorna.",
+    "💀 El alma vuelve a reclamar su lugar entre los vivos.",
+    "🦇 El eco del ausente se hace presente.",
+    "🔔 Presencia espectral detectada nuevamente.",
+    "🌒 El portal se cierra: el espíritu ha vuelto."
 ]
+
 
 # =========================
 # /help dinámico (formato BotFather)
