@@ -20,9 +20,7 @@ TOKEN = os.getenv("TOKEN")
 PERSIST_DIR = os.environ.get("PERSIST_DIR", "/data").strip() or "."
 ROSTER_FILE = os.path.join(PERSIST_DIR, "roster.json")
 SETTINGS_FILE = os.path.join(PERSIST_DIR, "settings.json")
-LIST_URL = os.environ.get("LIST_URL", "")
-LIST_IMPORT_ONCE = os.environ.get("LIST_IMPORT_ONCE", "true").lower() in {"1","true","yes","y"}
-LIST_IMPORT_MODE = os.environ.get("LIST_IMPORT_MODE", "merge").lower() # merge|seed
+# merge|seed
 
 # =========================
 # ESTADO EN MEMORIA
@@ -214,9 +212,6 @@ def build_mentions_html(members: List[dict]) -> List[str]:
         chunks.append(", ".join(batch))
     return chunks
 
-ROSTER_LINE_RE = re.compile(r"^\s*\[?(\d+)\]?\s+(.+?)\s+\[?(-?\d+)\]?\s*$")
-
-
 def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
     if not url:
         return (None, {})
@@ -278,51 +273,6 @@ def _merge_roster(
             # mode "seed": no toca els existents
         out[uid] = cur
     return out
-
-def ensure_import_once():
-    if not LIST_URL:
-        return
-    ded_chat, parsed = _import_list(LIST_URL)
-    if not parsed or ded_chat is None:
-        return
-    cs = get_chat_settings(ded_chat)
-    if LIST_IMPORT_ONCE and cs.get("list_import_done"):
-        return
-    roster = load_roster()
-    key = str(ded_chat)
-    existing = roster.get(key, {})
-    if LIST_IMPORT_MODE == "seed" and existing:
-        pass
-    else:
-        merged = _merge_roster(existing, parsed, mode=LIST_IMPORT_MODE)
-        roster[key] = merged
-        save_roster(roster)
-    if LIST_IMPORT_ONCE:
-        set_chat_setting(ded_chat, "list_import_done", True)
-
-# =========================
-# TEXTOS (NORMAL vs HALLOWEEN)
-# =========================
-AFK_PHRASES_NORMAL = [
-    "{first} se ha puesto en modo AFK.",
-    "{first} está AFK. Deja tu recado.",
-    "{first} se ausenta un momento."
-]
-AFK_RETURN_NORMAL = [
-    "{first} ha vuelto 👋",
-    "{first} está de vuelta.",
-    "{first} ha regresado."
-]
-AFK_PHRASES_SPOOKY = [
-    "🎃 {first} se ha desvanecido entre la niebla… (AFK)",
-    "🕯️ {first} ha cruzado al reino de las sombras (AFK). Deja tu ofrenda.",
-    "🦇 {first} abandona el plano mortal un momento (AFK)."
-]
-AFK_RETURN_SPOOKY = [
-    "🧛‍♂️ {first} ha salido del ataúd. ¡Ha vuelto!",
-    "👻 {first} regresa desde el más allá.",
-    "🕸️ {first} ha roto el hechizo y está de vuelta."
-]
 
 def choose_afk_phrase(chat_id: int) -> str:
     return random.choice(AFK_PHRASES_SPOOKY if is_spooky(chat_id) else AFK_PHRASES_NORMAL)
@@ -1429,8 +1379,6 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 # =========================
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
-    ensure_import_once()
-
     # START / HELP / HALLOWEEN
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
