@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# bot.py — Telegram bot (PTB v21) con @all confirmado, caché de admins, cooldowns
+# y guardado de settings/roster con debounce.
+# Español en mensajes y comentarios, como se solicitó.
+
 import os, json, time, random, asyncio, logging, re, html, unicodedata, threading
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
@@ -477,6 +482,7 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
 # START / HELP / HALLOWEEN
 # =========================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _ensure_bg_task(context.application)
     msg = update.message
     spooky = is_spooky(msg.chat.id)
 
@@ -1353,6 +1359,7 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ON MESSAGE
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _ensure_bg_task(context.application)
     msg = update.message
     if not msg or not msg.from_user or not msg.text:
         return
@@ -1398,19 +1405,38 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logging.exception("Unhandled exception", exc_info=context.error)
 
 
+
+
 # =========================
-# POST INIT (JobQueue setup)
+# BACKGROUND FLUSH LOOP (sin JobQueue)
 # =========================
-async def _post_init(application: Application) -> None:
-    # Jobs periódicos para persistencia (cada 30 s)
-    application.job_queue.run_repeating(flush_settings_debounced_job, interval=30, first=30)
-    application.job_queue.run_repeating(flush_roster_debounced_job, interval=30, first=30)
+_BG_TASK_STARTED = False
+
+async def _flush_background_loop(application):
+    # Bucle que cada 30 s guarda settings y roster si hay cambios.
+    try:
+        while True:
+            await asyncio.sleep(30)
+            await flush_settings_debounced_job(application)
+            await flush_roster_debounced_job(application)
+    except asyncio.CancelledError:
+        # Flush final al cancelar
+        await flush_settings_debounced_job(application)
+        await flush_roster_debounced_job(application)
+
+def _ensure_bg_task(application):
+    global _BG_TASK_STARTED
+    if _BG_TASK_STARTED:
+        return
+    # create_task cuando el loop ya está corriendo (se llama desde un handler)
+    application.create_task(_flush_background_loop(application))
+    _BG_TASK_STARTED = True
 
 # =========================
 # MAIN
 # =========================
 def main():
-    app = ApplicationBuilder().token(TOKEN).post_init(_post_init).build()
+    app = ApplicationBuilder().token(TOKEN).build()
 
     # START / HELP / HALLOWEEN
     app.add_handler(CommandHandler("start", start_cmd))
