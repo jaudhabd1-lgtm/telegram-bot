@@ -73,6 +73,34 @@ def is_spooky(cid: int) -> bool:
     cfg = get_chat_settings(cid)
     return bool(cfg.get("halloween", False))
 
+# Frases AFK (modo normal y modo Halloween)
+AFK_PHRASES_NORMAL = [
+"Estado AFK activado. No disponible por ahora.",
+"Se activa el modo ausente. Volverá cuando pueda.",
+"AFK: no responde en este momento.",
+]
+
+
+AFK_RETURN_NORMAL = [
+"Fin del modo AFK: ya está de vuelta.",
+"Regreso detectado: operativo otra vez.",
+"AFK desactivado: disponible de nuevo.",
+]
+
+
+AFK_PHRASES_SPOOKY = [
+"👻 AFK espectral activo. Ha desaparecido entre la niebla.",
+"🕯️ Ritual de ausencia iniciado. Las sombras responden por él.",
+"🎃 Silencio embrujado: no está disponible ahora mismo.",
+]
+
+
+AFK_RETURN_SPOOKY = [
+"🕯️ El portal se cierra: ha regresado.",
+"🎃 Vuelve de entre las sombras: AFK desactivado.",
+"👻 Aparición completa: operativo otra vez.",
+]
+
 # =========================
 # /help dinámico (formato BotFather)
 # =========================
