@@ -1,6 +1,11 @@
-import os, json, time, random, asyncio, logging, re, html, unicodedata
+# -*- coding: utf-8 -*-
+# bot.py — Telegram bot (PTB v21) con @all confirmado, caché de admins, cooldowns
+# y guardado de settings/roster con debounce.
+# Español en mensajes y comentarios, como se solicitó.
+
+import os, json, time, random, asyncio, logging, re, html, unicodedata, threading
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from zoneinfo import ZoneInfo
 import pytz
 import country_converter as coco
@@ -17,6 +22,8 @@ from telegram.ext import (
 # CONFIGURACIÓN GENERAL
 # =========================
 TOKEN = os.getenv("TOKEN")
+if not TOKEN:
+    raise RuntimeError("Falta la variable de entorno TOKEN.")
 ROSTER_FILE = "roster.json"
 SETTINGS_FILE = "settings.json"
 
@@ -36,25 +43,60 @@ TTT_X = "❌"
 TTT_O = "⭕"
 
 logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("bot")
 
 # =========================
-# SETTINGS (por chat)
+# SETTINGS (cache + debounce)
 # =========================
+_SETTINGS_CACHE: Dict[str, Any] | None = None
+_SETTINGS_LOCK = threading.Lock()
+_SETTINGS_DIRTY = False
+
+def _safe_read_json(path: str, default: Any) -> Any:
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        log.warning("No se pudo leer %s: %s", path, e)
+        return default
+
+def _safe_write_json(path: str, payload: Any) -> None:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
 def load_settings() -> Dict[str, Any]:
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+    """Devuelve el diccionario de settings desde caché; carga desde disco la primera vez."""
+    global _SETTINGS_CACHE
+    with _SETTINGS_LOCK:
+        if _SETTINGS_CACHE is not None:
+            return _SETTINGS_CACHE
+        _SETTINGS_CACHE = _safe_read_json(SETTINGS_FILE, {})
+        return _SETTINGS_CACHE
 
 def save_settings(s: Dict[str, Any]) -> None:
-    try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(s, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logging.exception("No se pudo guardar settings", exc_info=e)
+    """Actualiza la caché y marca como sucio para guardar en segundo plano."""
+    global _SETTINGS_CACHE, _SETTINGS_DIRTY
+    with _SETTINGS_LOCK:
+        _SETTINGS_CACHE = s
+        _SETTINGS_DIRTY = True
+
+def flush_settings_now() -> None:
+    """Guarda settings inmediatamente (bloqueante)."""
+    global _SETTINGS_CACHE, _SETTINGS_DIRTY
+    with _SETTINGS_LOCK:
+        if _SETTINGS_CACHE is None or not _SETTINGS_DIRTY:
+            return
+        _safe_write_json(SETTINGS_FILE, _SETTINGS_CACHE)
+        _SETTINGS_DIRTY = False
+        log.debug("Settings guardados.")
+
+async def flush_settings_debounced_job(_: ContextTypes.DEFAULT_TYPE):
+    """Job periódico: guarda settings si hay cambios pendientes."""
+    flush_settings_now()
 
 def get_chat_settings(cid: int) -> Dict[str, Any]:
     s = load_settings()
@@ -100,12 +142,22 @@ def format_duration(seconds: float) -> str:
     if not parts: parts.append(f"{s}s")
     return " ".join(parts)
 
-async def is_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
+# --- Caché de admins (TTL) ---
+_ADMIN_CACHE: Dict[Tuple[int,int], Tuple[bool, float]] = {}
+
+async def is_admin_cached(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int, ttl: int = 90) -> bool:
+    now = time.time()
+    key = (chat_id, user_id)
+    cached = _ADMIN_CACHE.get(key)
+    if cached and now - cached[1] < ttl:
+        return cached[0]
     try:
         member = await context.bot.get_chat_member(chat_id, user_id)
-        return member.status in ("administrator", "creator")
+        ok = member.status in ("administrator", "creator")
     except Exception:
-        return False
+        ok = False
+    _ADMIN_CACHE[key] = (ok, now)
+    return ok
 
 async def safe_q_answer(q, text: str | None = None, show_alert: bool = False):
     try:
@@ -123,21 +175,41 @@ async def _bot_username(context: ContextTypes.DEFAULT_TYPE) -> str:
     return me.username
 
 # =========================
-# ROSTER
+# ROSTER (cache + debounce)
 # =========================
+_ROSTER_CACHE: Dict[str, Dict[str, Dict[str, Any]]] | None = None
+_ROSTER_LOCK = threading.Lock()
+_ROSTER_DIRTY = False
+
 def load_roster() -> dict:
-    try:
-        with open(ROSTER_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    """Devuelve el roster desde caché; carga desde disco la primera vez."""
+    global _ROSTER_CACHE
+    with _ROSTER_LOCK:
+        if _ROSTER_CACHE is not None:
+            return _ROSTER_CACHE
+        _ROSTER_CACHE = _safe_read_json(ROSTER_FILE, {})
+        return _ROSTER_CACHE
 
 def save_roster(roster: dict) -> None:
-    try:
-        with open(ROSTER_FILE, "w", encoding="utf-8") as f:
-            json.dump(roster, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logging.exception("No se pudo guardar roster", exc_info=e)
+    """Actualiza la caché y marca para guardar en segundo plano."""
+    global _ROSTER_CACHE, _ROSTER_DIRTY
+    with _ROSTER_LOCK:
+        _ROSTER_CACHE = roster
+        _ROSTER_DIRTY = True
+
+def flush_roster_now() -> None:
+    """Guarda roster inmediatamente (bloqueante)."""
+    global _ROSTER_CACHE, _ROSTER_DIRTY
+    with _ROSTER_LOCK:
+        if _ROSTER_CACHE is None or not _ROSTER_DIRTY:
+            return
+        _safe_write_json(ROSTER_FILE, _ROSTER_CACHE)
+        _ROSTER_DIRTY = False
+        log.debug("Roster guardado.")
+
+async def flush_roster_debounced_job(_: ContextTypes.DEFAULT_TYPE):
+    """Job periódico: guarda roster si hay cambios pendientes."""
+    flush_roster_now()
 
 def upsert_roster_member(chat_id: int, user) -> None:
     if not user:
@@ -146,13 +218,14 @@ def upsert_roster_member(chat_id: int, user) -> None:
     key = str(chat_id)
     chat_data = roster.get(key, {})
     uid = str(user.id)
-    name = user.first_name or user.username or "Usuario"
-    if uid not in chat_data:
-        chat_data[uid] = {"name": name, "last_ts": time.time(), "messages": 1}
-    else:
-        chat_data[uid]["name"] = name
-        chat_data[uid]["last_ts"] = time.time()
-        chat_data[uid]["messages"] = chat_data[uid].get("messages", 0) + 1
+    # Guardamos is_bot, username y nombre
+    chat_data[uid] = {
+        "name": user.first_name or user.username or "Usuario",
+        "username": user.username,
+        "is_bot": bool(user.is_bot),
+        "last_ts": time.time(),
+        "messages": int(chat_data.get(uid, {}).get("messages", 0)) + 1,
+    }
     roster[key] = chat_data
     save_roster(roster)
 
@@ -168,15 +241,8 @@ def get_chat_roster(chat_id: int) -> List[dict]:
         except Exception:
             continue
         raw_name = str(info.get("name") or "").strip() or "usuario"
-        nm = raw_name.lower()
-        is_bot = any([
-            nm.endswith("_bot"),
-            " bot" in nm,
-            nm.startswith("@missrose_bot"),
-            nm.startswith("@chatfightbot"),
-            nm.startswith("@linemusicbot")
-        ])
-        username = raw_name[1:].lower() if raw_name.startswith("@") else ""
+        username = (info.get("username") or "") or ""
+        is_bot = bool(info.get("is_bot", False))
         norm.append({
             "id": uid,
             "first_name": raw_name,
@@ -190,6 +256,7 @@ def _display_name(u: dict) -> str:
     return name if name else "usuario"
 
 def build_mentions_html(members: List[dict]) -> List[str]:
+    """Construye menciones HTML válidas y las divide en bloques (~20 por mensaje)."""
     seen = set()
     clean = []
     for u in members:
@@ -565,8 +632,8 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
 # =========================
 async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    # SOLO ADMIN
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
+    # SOLO ADMIN (con caché)
+    if not await is_admin_cached(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
     spooky = is_spooky(chat.id)
@@ -609,8 +676,8 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    # SOLO ADMIN
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
+    # SOLO ADMIN (con caché)
+    if not await is_admin_cached(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
     spooky = is_spooky(chat.id)
@@ -718,7 +785,7 @@ async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[bool, str]:
     spooky = is_spooky(chat_id)
-    if not await is_admin(context, chat_id, user_id):
+    if not await is_admin_cached(context, chat_id, user_id):
         return False, txt_all_perm(spooky)
     cfg = get_chat_settings(chat_id)
     if not cfg.get("all_enabled", True):
@@ -737,9 +804,9 @@ async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_u
     if not parts:
         await context.bot.send_message(chat_id=chat.id, text=txt_no_targets(spooky)); return
 
-    header = txt_all_header(spooky, by_user.first_name, extra)
+    header = txt_all_header(spooky, by_user.first_name, html.escape(extra) if extra else "")
     try:
-        await context.bot.send_message(chat_id=chat.id, text=header)
+        await context.bot.send_message(chat_id=chat.id, text=header, parse_mode="HTML")
     except Exception as e:
         logging.exception("Fallo cabecera @all", exc_info=e)
 
@@ -786,8 +853,8 @@ async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    # SOLO ADMIN
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
+    # SOLO ADMIN (con caché)
+    if not await is_admin_cached(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     spooky = is_spooky(msg.chat.id)
     context.user_data.pop("pending_all", None)
@@ -871,9 +938,9 @@ async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by
     if not admins:
         return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins(spooky))
     parts = _build_mentions_html_from_basic(admins)
-    header = txt_admin_header(spooky, by_user.first_name, extra)
+    header = txt_admin_header(spooky, by_user.first_name, html.escape(extra) if extra else "")
     try:
-        await context.bot.send_message(chat_id=chat.id, text=header)
+        await context.bot.send_message(chat_id=chat.id, text=header, parse_mode="HTML")
     except Exception as e:
         logging.exception("Fallo cabecera @admin", exc_info=e)
     motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
@@ -952,7 +1019,8 @@ async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_T
 # =========================
 def _ttt_stats_load() -> dict:
     s = load_settings()
-    return s.setdefault("_ttt_stats", {})
+    s.setdefault("_ttt_stats", {})
+    return s["_ttt_stats"]
 
 def _ttt_stats_save(stats: dict) -> None:
     s = load_settings()
@@ -1171,7 +1239,7 @@ async def ttt_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat
     if not state:
         return await safe_q_answer(q, "Nada que cancelar.", show_alert=True)
     if state["status"] == "waiting":
-        if user.id != state["players"]["X_id"] and not await is_admin(context, chat_id, user.id):
+        if user.id != state["players"]["X_id"] and not await is_admin_cached(context, chat_id, user.id):
             return await safe_q_answer(q, "No puedes cancelar esta partida.", show_alert=True)
         _ttt_del_game(chat_id, msg_id)
         await safe_q_answer(q)
@@ -1397,6 +1465,11 @@ def main():
 
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
+
+    # Jobs periódicos para persistencia (cada 30 s)
+    app.job_queue.run_repeating(flush_settings_debounced_job, interval=30, first=30)
+    app.job_queue.run_repeating(flush_roster_debounced_job, interval=30, first=30)
+
     app.run_polling()
 
 if __name__ == "__main__":
