@@ -17,8 +17,12 @@ from telegram.ext import (
 # CONFIGURACIÓN GENERAL
 # =========================
 TOKEN = os.getenv("TOKEN")
-ROSTER_FILE = "roster.json"
-SETTINGS_FILE = "settings.json"
+PERSIST_DIR = os.environ.get("PERSIST_DIR", "/data").strip() or "."
+ROSTER_FILE = os.path.join(PERSIST_DIR, "roster.json")
+SETTINGS_FILE = os.path.join(PERSIST_DIR, "settings.json")
+LIST_URL = os.environ.get("LIST_URL", "")
+LIST_IMPORT_ONCE = os.environ.get("LIST_IMPORT_ONCE", "true").lower() in {"1","true","yes","y"}
+LIST_IMPORT_MODE = os.environ.get("LIST_IMPORT_MODE", "merge").lower() # merge|seed
 
 # =========================
 # ESTADO EN MEMORIA
@@ -209,6 +213,92 @@ def build_mentions_html(members: List[dict]) -> List[str]:
     if batch:
         chunks.append(", ".join(batch))
     return chunks
+
+ROSTER_LINE_RE = re.compile(r"^\s*\[?(\d+)\]?\s+(.+?)\s+\[?(-?\d+)\]?\s*$")
+
+
+def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
+    if not url:
+        return (None, {})
+    try:
+        from urllib.request import urlopen
+        # from urllib.error import URLError, HTTPError  # opcional si vols tractar errors específics
+        with urlopen(url, timeout=15) as r:
+            content = r.read().decode("utf-8", errors="replace")
+    except Exception:
+        return (None, {})
+    parsed: dict[str, dict[str, Any]] = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = ROSTER_LINE_RE.match(line)
+        if not m:
+            continue
+        msgs = int(m.group(1))
+        middle = m.group(2).strip()
+        uid_str = m.group(3)
+        try:
+            uid = str(int(uid_str))
+        except ValueError:
+            continue
+        username = None
+        name = middle
+        if middle.startswith("@"):
+            username = middle[1:]
+            name = middle  # si vols, podries posar name = username
+        parsed[uid] = {
+            "name": name,
+            "username": username,
+            "is_bot": False,
+            "last_ts": time.time(),
+            "messages": msgs,
+        }
+    m = re.search(r"list_(\-?\d+)\.txt", url)
+    chat_id = int(m.group(1)) if m else None
+    return (chat_id, parsed)
+def _merge_roster(
+    existing: dict[str, dict[str, Any]],
+    incoming: dict[str, dict[str, Any]],
+    mode: str = "merge",
+) -> dict[str, dict[str, Any]]:
+    out = dict(existing)
+    for uid, pdata in incoming.items():
+        if uid not in out:
+            out[uid] = pdata
+            continue
+        cur = dict(out[uid])
+        if mode == "merge":
+            if not cur.get("username") and pdata.get("username"):
+                cur["username"] = pdata["username"]
+            if not cur.get("name") and pdata.get("name"):
+                cur["name"] = pdata["name"]
+            cur["messages"] = max(int(cur.get("messages", 0)), int(pdata.get("messages", 0)))
+            cur["last_ts"] = max(float(cur.get("last_ts", 0.0)), float(pdata.get("last_ts", 0.0)))
+            # mode "seed": no toca els existents
+        out[uid] = cur
+    return out
+
+def ensure_import_once():
+    if not LIST_URL:
+        return
+    ded_chat, parsed = _import_list(LIST_URL)
+    if not parsed or ded_chat is None:
+        return
+    cs = get_chat_settings(ded_chat)
+    if LIST_IMPORT_ONCE and cs.get("list_import_done"):
+        return
+    roster = load_roster()
+    key = str(ded_chat)
+    existing = roster.get(key, {})
+    if LIST_IMPORT_MODE == "seed" and existing:
+        pass
+    else:
+        merged = _merge_roster(existing, parsed, mode=LIST_IMPORT_MODE)
+        roster[key] = merged
+        save_roster(roster)
+    if LIST_IMPORT_ONCE:
+        set_chat_setting(ded_chat, "list_import_done", True)
 
 # =========================
 # TEXTOS (NORMAL vs HALLOWEEN)
@@ -1339,6 +1429,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 # =========================
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
+    ensure_import_once()
 
     # START / HELP / HALLOWEEN
     app.add_handler(CommandHandler("start", start_cmd))
@@ -1398,6 +1489,5 @@ def main():
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
     app.run_polling()
-
 if __name__ == "__main__":
     main()
