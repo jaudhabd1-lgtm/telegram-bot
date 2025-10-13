@@ -1331,7 +1331,7 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg or not msg.from_user or not msg.text:
+    if not msg or not msg.from_user:
         return
     chat = msg.chat
     user = msg.from_user
@@ -1417,8 +1417,8 @@ def main():
     app.add_handler(CommandHandler("top_ttt", top_ttt_cmd))
 
     # CATCH-ALL
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message), group=50)
-
+    app.add_handler(MessageHandler(~filters.COMMAND, on_message), group=50)
+    
     # /help dinámico (formato BotFather)
     register_command("start", "muestra el mensaje de bienvenida del bot")
     register_command("help", "lista los comandos disponibles")
