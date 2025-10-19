@@ -6,7 +6,7 @@ import pytz
 import country_converter as coco
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ChatType
+from telegram.constants import ChatType, ChatMemberStatus
 from telegram.error import BadRequest
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
@@ -1424,6 +1424,137 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.exception("Unhandled exception", exc_info=context.error)
 
+
+# =========================
+# /CONFIG — Panel compacto con toggles
+# =========================
+MODULES: Dict[str, Dict[str, str]] = {
+    "afk": {"key": "afk_enabled", "label": "AFK"},
+    "all": {"key": "all_enabled", "label": "@all"},
+    "admin": {"key": "admin_enabled", "label": "@admin"},
+    "autoresp": {"key": "autoresponder_enabled", "label": "Autoresponder"},
+    "ttt": {"key": "ttt_enabled", "label": "TTT"},
+    "trivia": {"key": "trivia_enabled", "label": "Trivia"},
+    "namechg": {"key": "notify_name_change", "label": "Aviso nombre/@"},
+    "halloween": {"key": "halloween", "label": "Halloween"},
+}
+
+DEFAULTS: Dict[str, bool] = {
+    "afk_enabled": True,
+    "all_enabled": True,
+    "admin_enabled": True,
+    "autoresponder_enabled": True,
+    "ttt_enabled": True,
+    "trivia_enabled": False,
+    "notify_name_change": False,
+    "halloween": False,
+}
+
+def _with_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(DEFAULTS)
+    out.update(cfg or {})
+    return out
+
+def build_config_keyboard(chat_id: int) -> InlineKeyboardMarkup:
+    cfg = _with_defaults(get_chat_settings(chat_id))
+
+    def b(mod_code: str) -> InlineKeyboardButton:
+        info = MODULES[mod_code]
+        key = info["key"]
+        label = info["label"]
+        enabled = bool(cfg.get(key, DEFAULTS.get(key, False)))
+        state = "✅" if enabled else "❌"
+        return InlineKeyboardButton(f"{label} {state}", callback_data=f"cfg:t:{mod_code}")
+
+    codes = list(MODULES.keys())
+    rows = []
+    for i in range(0, len(codes), 2):
+        chunk = codes[i:i+2]
+        rows.append([b(c) for c in chunk])
+
+    rows.append([
+        InlineKeyboardButton("🔄 Refrescar", callback_data="cfg:r"),
+        InlineKeyboardButton("✖️ Cerrar", callback_data="cfg:x"),
+    ])
+    return InlineKeyboardMarkup(rows)
+
+async def _assert_admin_or_warn(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
+    if await is_admin(context, chat_id, user_id):
+        return True
+    try:
+        if update.callback_query:
+            await safe_q_answer(update.callback_query, "Solo administradores.", show_alert=True)
+        elif update.message:
+            await update.message.reply_text("Solo administradores pueden cambiar la configuración.")
+    except Exception:
+        pass
+    return False
+
+async def config_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    chat = msg.chat
+
+    if chat.type == ChatType.PRIVATE:
+        return await msg.reply_text("Esta configuración es por chat. Usa /config en el grupo donde seas administrador.")
+
+    if not await _assert_admin_or_warn(update, context, chat.id, msg.from_user.id):
+        return
+
+    kb = build_config_keyboard(chat.id)
+    title = "⚙️ Configuración del chat\nToca para activar/desactivar módulos. Solo administradores."
+    await msg.reply_text(title, reply_markup=kb)
+
+async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    data = q.data or ""
+    chat = q.message.chat
+    user_id = q.from_user.id
+
+    if not await _assert_admin_or_warn(update, context, chat.id, user_id):
+        return
+
+    try:
+        parts = data.split(":", 2)
+        if len(parts) < 2 or parts[0] != "cfg":
+            return
+        action = parts[1]
+
+        if action == "t":
+            mod_code = parts[2]
+            info = MODULES.get(mod_code)
+            if not info:
+                return await safe_q_answer(q, "Módulo desconocido.")
+            key = info["key"]
+            cfg = _with_defaults(get_chat_settings(chat.id))
+            cur = bool(cfg.get(key, DEFAULTS.get(key, False)))
+            set_chat_setting(chat.id, key, not cur)
+            try:
+                await q.message.edit_reply_markup(reply_markup=build_config_keyboard(chat.id))
+            except BadRequest:
+                pass
+            return await safe_q_answer(q, "Guardado.")
+
+        if action == "r":
+            try:
+                await q.message.edit_reply_markup(reply_markup=build_config_keyboard(chat.id))
+            except BadRequest:
+                pass
+            return await safe_q_answer(q, "Actualizado.")
+
+        if action == "x":
+            try:
+                await q.message.edit_reply_markup(reply_markup=None)
+            except BadRequest:
+                pass
+            return await safe_q_answer(q)
+
+    except Exception:
+        logging.exception("Error en cfg_callback")
+        try:
+            await safe_q_answer(q, "No se pudo guardar. Inténtalo de nuevo.", show_alert=True)
+        except Exception:
+            pass
+
 # =========================
 # MAIN
 # =========================
@@ -1434,7 +1565,9 @@ def main():
     # START / HELP / HALLOWEEN
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("config", config_cmd))
     app.add_handler(CallbackQueryHandler(callback_show_help, pattern=r"^show_help$"))
+    app.add_handler(CallbackQueryHandler(cfg_callback, pattern=r"^cfg:"))
     app.add_handler(CommandHandler("halloween", halloween_cmd))
 
     # AFK
@@ -1474,6 +1607,7 @@ def main():
     # /help dinámico (formato BotFather)
     register_command("start", "muestra el mensaje de bienvenida del bot")
     register_command("help", "lista los comandos disponibles")
+    register_command("config", "abrir panel de configuración del chat", admin=True)
     register_command("halloween", "activa o desactiva el modo halloween (on/off/status)", admin=True)
     register_command("afk", "activa el modo afk con un motivo opcional")
     register_command("autoresponder", "activa una respuesta automática para un usuario", admin=True)
