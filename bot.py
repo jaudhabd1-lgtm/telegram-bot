@@ -90,6 +90,15 @@ def format_commands_list_botfather() -> str:
     return "\n".join(lines) if lines else "/empty"
 
 # =========================
+
+
+def enabled(chat_id: int, key: str, default: bool) -> bool:
+    try:
+        cfg = get_chat_settings(chat_id)
+        return bool(cfg.get(key, default))
+    except Exception:
+        return default
+
 # UTILS
 # =========================
 def format_duration(seconds: float) -> str:
@@ -143,6 +152,7 @@ def save_roster(roster: dict) -> None:
     except Exception as e:
         logging.exception("No se pudo guardar roster", exc_info=e)
 
+
 def upsert_roster_member(chat_id: int, user) -> None:
     if not user:
         return
@@ -151,10 +161,12 @@ def upsert_roster_member(chat_id: int, user) -> None:
     chat_data = roster.get(key, {})
     uid = str(user.id)
     name = user.first_name or user.username or "Usuario"
+    username = (user.username or "").lower()
     if uid not in chat_data:
-        chat_data[uid] = {"name": name, "last_ts": time.time(), "messages": 1}
+        chat_data[uid] = {"name": name, "username": username, "last_ts": time.time(), "messages": 1}
     else:
         chat_data[uid]["name"] = name
+        chat_data[uid]["username"] = username
         chat_data[uid]["last_ts"] = time.time()
         chat_data[uid]["messages"] = chat_data[uid].get("messages", 0) + 1
     roster[key] = chat_data
@@ -1386,6 +1398,11 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = msg.chat
     user = msg.from_user
 
+    # SangMata: notifica si han cambiado nombre/@
+    try:
+        await maybe_notify_name_change(update, context, chat.id, user)
+    except Exception:
+        logging.exception("maybe_notify_name_change falló")
     # roster
     upsert_roster_member(chat.id, user)
     if msg.reply_to_message and msg.reply_to_message.from_user:
@@ -1555,6 +1572,55 @@ async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+
+
+async def maybe_notify_name_change(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, user) -> None:
+        # Controlado por /config → "SangMata" (notify_name_change)
+        if not enabled(chat_id, "notify_name_change", False):
+            return
+        try:
+            roster = load_roster()
+            key = str(chat_id)
+            chat_data = roster.get(key, {})
+            uid = str(user.id)
+            prev = chat_data.get(uid, {})
+
+            prev_name = str(prev.get("name") or "").strip()
+            prev_user = str(prev.get("username") or "").lower().strip()
+
+            fn = (user.first_name or "").strip()
+            ln = (getattr(user, "last_name", None) or "").strip()
+            now_name = (f"{fn} {ln}".strip() if ln else fn) or (user.username or "Usuario")
+            now_user = (user.username or "").lower().strip()
+
+            name_changed = bool(prev_name) and (prev_name != now_name)
+            user_changed = (prev_user != now_user)
+
+            if not (name_changed or user_changed):
+                return
+
+            mention = f'<a href="tg://user?id={user.id}">{html.escape(now_name)}</a>'
+            parts = []
+            if name_changed:
+                parts.append(f"📝 Nombre: <i>{html.escape(prev_name or '—')}</i> → <b>{html.escape(now_name)}</b>")
+            if user_changed:
+                old_u = f"@{prev_user}" if prev_user else "—"
+                new_u = f"@{now_user}" if now_user else "—"
+                parts.append(f"🔧 Usuario: <i>{html.escape(old_u)}</i> → <b>{html.escape(new_u)}</b>")
+            text = "🔔 {} ha cambiado su identidad:\n{}".format(mention, "\n".join(parts))
+            await context.bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
+
+            # Actualiza roster para no repetir el aviso
+            chat_data[uid] = {
+                "name": now_name,
+                "username": now_user,
+                "last_ts": time.time(),
+                "messages": int(prev.get("messages", 0)) + 1,
+            }
+            roster[key] = chat_data
+            save_roster(roster)
+        except Exception as e:
+            logging.exception("Error en SangMata (maybe_notify_name_change)", exc_info=e)
 # =========================
 # MAIN
 # =========================
