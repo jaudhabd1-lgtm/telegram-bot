@@ -1435,7 +1435,7 @@ MODULES: Dict[str, Dict[str, str]] = {
     "autoresp": {"key": "autoresponder_enabled", "label": "Autoresponder"},
     "ttt": {"key": "ttt_enabled", "label": "TTT"},
     "trivia": {"key": "trivia_enabled", "label": "Trivia"},
-    "namechg": {"key": "notify_name_change", "label": "Aviso nombre/@"},
+    "namechg": {"key": "notify_name_change", "label": "SangMata"},
     "halloween": {"key": "halloween", "label": "Halloween"},
 }
 
