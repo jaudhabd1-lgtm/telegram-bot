@@ -90,6 +90,13 @@ def format_commands_list_botfather() -> str:
     return "\n".join(lines) if lines else "/empty"
 
 # =========================
+def enabled(chat_id: int, key: str, default: bool) -> bool:
+    try:
+        cfg = get_chat_settings(chat_id)
+        return bool(cfg.get(key, default))
+    except Exception:
+        return default
+
 # UTILS
 # =========================
 def format_duration(seconds: float) -> str:
@@ -107,7 +114,8 @@ def format_duration(seconds: float) -> str:
 async def is_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
     try:
         member = await context.bot.get_chat_member(chat_id, user_id)
-        return member.status in ("administrator", "creator")
+        from telegram.constants import ChatMemberStatus as _CMS
+        return getattr(member, "status", None) in (_CMS.ADMINISTRATOR, _CMS.OWNER)
     except Exception:
         return False
 
@@ -506,6 +514,8 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
 # =========================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    if not enabled(msg.chat.id, "afk_enabled", True):
+        return
     spooky = is_spooky(msg.chat.id)
 
     # Deep link: t.me/<bot>?start=help → muestra la ayuda directamente
@@ -527,6 +537,8 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = msg.chat
+    if not enabled(chat.id, "ttt_enabled", True):
+        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
 
     # En grupos: redirigir a privado con botón y autodestrucción
@@ -599,6 +611,8 @@ async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = msg.chat
     user = msg.from_user
     reason = " ".join(context.args) if context.args else None
+    if not enabled(chat.id, "afk_enabled", True):
+        return await msg.reply_text("El módulo AFK está desactivado en este chat.")
     AFK_USERS[user.id] = {"since": time.time(), "reason": reason, "username": (user.username or "").lower(), "first_name": user.first_name}
     phrase = choose_afk_phrase(chat.id).format(first=user.first_name)
     if reason:
@@ -611,6 +625,8 @@ async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t = msg.text.strip()
     m = re.match(r"(?is)^\s*(brb|afk)\b[^\S\r\n]*(.*)$", t)
     if not m: return
+    if not enabled(msg.chat.id, "afk_enabled", True):
+        return
     reason = m.group(2).strip()
     context.args = reason.split() if reason else []
     context.user_data["afk_skip_message_id"] = msg.message_id
@@ -619,6 +635,8 @@ async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg: return
+    if not enabled(msg.chat.id, "afk_enabled", True):
+        return
     spooky = is_spooky(msg.chat.id)
     # reply target
     if msg.reply_to_message and msg.reply_to_message.from_user:
@@ -655,10 +673,14 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
 # =========================
 async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    if not enabled(msg.chat.id, "autoresponder_enabled", True):
+        return await msg.reply_text("El módulo Autoresponder está desactivado en este chat.")
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
+    if not enabled(chat.id, "ttt_enabled", True):
+        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
 
     target_user = None
@@ -699,10 +721,14 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    if not enabled(msg.chat.id, "autoresponder_enabled", True):
+        return await msg.reply_text("El módulo Autoresponder está desactivado en este chat.")
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
+    if not enabled(chat.id, "ttt_enabled", True):
+        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
     target_user = None
 
@@ -776,6 +802,8 @@ def format_time_in_tz(tz: str) -> str:
 
 async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    if not enabled(msg.chat.id, "afk_enabled", True):
+        return
     spooky = is_spooky(msg.chat.id)
     query = " ".join(context.args).strip() if context.args else None
     resolved = resolve_country_to_iso2_and_name(query)
@@ -790,6 +818,8 @@ async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text: return
+    if not enabled(msg.chat.id, "afk_enabled", True):
+        return
     spooky = is_spooky(msg.chat.id)
     m = re.match(r"(?is)^\s*hora\b(.*)$", msg.text.strip())
     if not m: return
@@ -819,6 +849,8 @@ async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[b
     return True, ""
 
 async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
+    if not enabled(chat.id, "ttt_enabled", True):
+        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
     members = get_chat_roster(chat.id)
     if not members:
@@ -876,9 +908,13 @@ async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    if not enabled(msg.chat.id, "autoresponder_enabled", True):
+        return await msg.reply_text("El módulo Autoresponder está desactivado en este chat.")
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
+    if not enabled(msg.chat.id, "afk_enabled", True):
+        return
     spooky = is_spooky(msg.chat.id)
     context.user_data.pop("pending_all", None)
     context.user_data.pop("pending_admin", None)
@@ -956,6 +992,8 @@ def _build_mentions_html_from_basic(members: List[dict]) -> List[str]:
     return chunks
 
 async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
+    if not enabled(chat.id, "ttt_enabled", True):
+        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
     admins = await _get_admin_members(chat, context)
     if not admins:
@@ -1177,6 +1215,8 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     msg = update.message
     chat = msg.chat
+    if not enabled(chat.id, "ttt_enabled", True):
+        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
 
     pX = msg.from_user
@@ -1347,6 +1387,8 @@ async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         action = parts[1]
         chat_id = int(parts[2])
         msg_id = int(parts[3])
+        if not enabled(chat_id, "ttt_enabled", True):
+            return await safe_q_answer(q, "El juego Tres en raya está desactivado en este chat.", show_alert=True)
         if action == "play":
             idx = int(parts[4]); return await ttt_play_cb(update, context, chat_id, msg_id, idx)
         elif action == "join":
@@ -1373,6 +1415,8 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Muestra el ranking del chat para la métrica indicada (por defecto: wins).
     """
     msg = update.message
+    if not enabled(msg.chat.id, "ttt_enabled", True):
+        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     metric = (context.args[0].lower() if context.args else "wins")
     await context.bot.send_message(chat_id=msg.chat.id, text=_ttt_stats_top(msg.chat.id, metric))
 
@@ -1400,7 +1444,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await notify_if_mentioning_afk(update, context)
 
     # si quien habla estaba AFK -> retorno
-    if user.id in AFK_USERS:
+    if enabled(chat.id, "afk_enabled", True) and user.id in AFK_USERS:
         info = AFK_USERS.pop(user.id)
         since = info.get("since")
         phrase = choose_return_phrase(chat.id).format(first=user.first_name)
@@ -1409,7 +1453,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(phrase)
 
     # autoresponder
-    if chat.id in AUTO_RESPONDERS and user.id in AUTO_RESPONDERS[chat.id]:
+    if enabled(chat.id, "autoresponder_enabled", True) and chat.id in AUTO_RESPONDERS and user.id in AUTO_RESPONDERS[chat.id]:
         text = AUTO_RESPONDERS[chat.id][user.id]
         await context.bot.send_message(
             chat_id=chat.id,
