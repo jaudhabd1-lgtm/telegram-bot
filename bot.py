@@ -90,13 +90,6 @@ def format_commands_list_botfather() -> str:
     return "\n".join(lines) if lines else "/empty"
 
 # =========================
-def enabled(chat_id: int, key: str, default: bool) -> bool:
-    try:
-        cfg = get_chat_settings(chat_id)
-        return bool(cfg.get(key, default))
-    except Exception:
-        return default
-
 # UTILS
 # =========================
 def format_duration(seconds: float) -> str:
@@ -114,8 +107,7 @@ def format_duration(seconds: float) -> str:
 async def is_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
     try:
         member = await context.bot.get_chat_member(chat_id, user_id)
-        from telegram.constants import ChatMemberStatus as _CMS
-        return getattr(member, "status", None) in (_CMS.ADMINISTRATOR, _CMS.OWNER)
+        return member.status in ("administrator", "creator")
     except Exception:
         return False
 
@@ -159,12 +151,10 @@ def upsert_roster_member(chat_id: int, user) -> None:
     chat_data = roster.get(key, {})
     uid = str(user.id)
     name = user.first_name or user.username or "Usuario"
-    username = (user.username or "").lower()
     if uid not in chat_data:
-        chat_data[uid] = {"name": name, "username": username, "last_ts": time.time(), "messages": 1}
+        chat_data[uid] = {"name": name, "last_ts": time.time(), "messages": 1}
     else:
         chat_data[uid]["name"] = name
-        chat_data[uid]["username"] = username
         chat_data[uid]["last_ts"] = time.time()
         chat_data[uid]["messages"] = chat_data[uid].get("messages", 0) + 1
     roster[key] = chat_data
@@ -516,8 +506,6 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
 # =========================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not enabled(msg.chat.id, "afk_enabled", True):
-        return
     spooky = is_spooky(msg.chat.id)
 
     # Deep link: t.me/<bot>?start=help → muestra la ayuda directamente
@@ -539,8 +527,6 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = msg.chat
-    if not enabled(chat.id, "ttt_enabled", True):
-        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
 
     # En grupos: redirigir a privado con botón y autodestrucción
@@ -613,8 +599,6 @@ async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = msg.chat
     user = msg.from_user
     reason = " ".join(context.args) if context.args else None
-    if not enabled(chat.id, "afk_enabled", True):
-        return await msg.reply_text("El módulo AFK está desactivado en este chat.")
     AFK_USERS[user.id] = {"since": time.time(), "reason": reason, "username": (user.username or "").lower(), "first_name": user.first_name}
     phrase = choose_afk_phrase(chat.id).format(first=user.first_name)
     if reason:
@@ -627,8 +611,6 @@ async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t = msg.text.strip()
     m = re.match(r"(?is)^\s*(brb|afk)\b[^\S\r\n]*(.*)$", t)
     if not m: return
-    if not enabled(msg.chat.id, "afk_enabled", True):
-        return
     reason = m.group(2).strip()
     context.args = reason.split() if reason else []
     context.user_data["afk_skip_message_id"] = msg.message_id
@@ -637,8 +619,6 @@ async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg: return
-    if not enabled(msg.chat.id, "afk_enabled", True):
-        return
     spooky = is_spooky(msg.chat.id)
     # reply target
     if msg.reply_to_message and msg.reply_to_message.from_user:
@@ -675,14 +655,10 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
 # =========================
 async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not enabled(msg.chat.id, "autoresponder_enabled", True):
-        return await msg.reply_text("El módulo Autoresponder está desactivado en este chat.")
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
-    if not enabled(chat.id, "ttt_enabled", True):
-        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
 
     target_user = None
@@ -723,14 +699,10 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not enabled(msg.chat.id, "autoresponder_enabled", True):
-        return await msg.reply_text("El módulo Autoresponder está desactivado en este chat.")
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
-    if not enabled(chat.id, "ttt_enabled", True):
-        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
     target_user = None
 
@@ -804,8 +776,6 @@ def format_time_in_tz(tz: str) -> str:
 
 async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not enabled(msg.chat.id, "afk_enabled", True):
-        return
     spooky = is_spooky(msg.chat.id)
     query = " ".join(context.args).strip() if context.args else None
     resolved = resolve_country_to_iso2_and_name(query)
@@ -820,8 +790,6 @@ async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text: return
-    if not enabled(msg.chat.id, "afk_enabled", True):
-        return
     spooky = is_spooky(msg.chat.id)
     m = re.match(r"(?is)^\s*hora\b(.*)$", msg.text.strip())
     if not m: return
@@ -851,8 +819,6 @@ async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[b
     return True, ""
 
 async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
-    if not enabled(chat.id, "ttt_enabled", True):
-        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
     members = get_chat_roster(chat.id)
     if not members:
@@ -910,13 +876,9 @@ async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not enabled(msg.chat.id, "autoresponder_enabled", True):
-        return await msg.reply_text("El módulo Autoresponder está desactivado en este chat.")
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
-    if not enabled(msg.chat.id, "afk_enabled", True):
-        return
     spooky = is_spooky(msg.chat.id)
     context.user_data.pop("pending_all", None)
     context.user_data.pop("pending_admin", None)
@@ -994,8 +956,6 @@ def _build_mentions_html_from_basic(members: List[dict]) -> List[str]:
     return chunks
 
 async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
-    if not enabled(chat.id, "ttt_enabled", True):
-        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
     admins = await _get_admin_members(chat, context)
     if not admins:
@@ -1217,8 +1177,6 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     msg = update.message
     chat = msg.chat
-    if not enabled(chat.id, "ttt_enabled", True):
-        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     spooky = is_spooky(chat.id)
 
     pX = msg.from_user
@@ -1389,8 +1347,6 @@ async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         action = parts[1]
         chat_id = int(parts[2])
         msg_id = int(parts[3])
-        if not enabled(chat_id, "ttt_enabled", True):
-            return await safe_q_answer(q, "El juego Tres en raya está desactivado en este chat.", show_alert=True)
         if action == "play":
             idx = int(parts[4]); return await ttt_play_cb(update, context, chat_id, msg_id, idx)
         elif action == "join":
@@ -1417,8 +1373,6 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Muestra el ranking del chat para la métrica indicada (por defecto: wins).
     """
     msg = update.message
-    if not enabled(msg.chat.id, "ttt_enabled", True):
-        return await msg.reply_text("El juego Tres en raya está desactivado en este chat.")
     metric = (context.args[0].lower() if context.args else "wins")
     await context.bot.send_message(chat_id=msg.chat.id, text=_ttt_stats_top(msg.chat.id, metric))
 
@@ -1446,7 +1400,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await notify_if_mentioning_afk(update, context)
 
     # si quien habla estaba AFK -> retorno
-    if enabled(chat.id, "afk_enabled", True) and user.id in AFK_USERS:
+    if user.id in AFK_USERS:
         info = AFK_USERS.pop(user.id)
         since = info.get("since")
         phrase = choose_return_phrase(chat.id).format(first=user.first_name)
@@ -1455,7 +1409,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(phrase)
 
     # autoresponder
-    if enabled(chat.id, "autoresponder_enabled", True) and chat.id in AUTO_RESPONDERS and user.id in AUTO_RESPONDERS[chat.id]:
+    if chat.id in AUTO_RESPONDERS and user.id in AUTO_RESPONDERS[chat.id]:
         text = AUTO_RESPONDERS[chat.id][user.id]
         await context.bot.send_message(
             chat_id=chat.id,
@@ -1481,7 +1435,7 @@ MODULES: Dict[str, Dict[str, str]] = {
     "autoresp": {"key": "autoresponder_enabled", "label": "Autoresponder"},
     "ttt": {"key": "ttt_enabled", "label": "TTT"},
     "trivia": {"key": "trivia_enabled", "label": "Trivia"},
-    "namechg": {"key": "notify_name_change", "label": "SangMata"},
+    "namechg": {"key": "notify_name_change", "label": "Aviso nombre/@"},
     "halloween": {"key": "halloween", "label": "Halloween"},
 }
 
@@ -1600,52 +1554,6 @@ async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_q_answer(q, "No se pudo guardar. Inténtalo de nuevo.", show_alert=True)
         except Exception:
             pass
-
-
-async def maybe_notify_name_change(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, user) -> None:
-    # Toggled by /config -> "Aviso nombre/@"
-    if not enabled(chat_id, "notify_name_change", False):
-        return
-    try:
-        roster = load_roster()
-        key = str(chat_id)
-        chat_data = roster.get(key, {})
-        uid = str(user.id)
-        prev = chat_data.get(uid, {})
-        prev_name = str(prev.get("name") or "")
-        prev_user = str(prev.get("username") or "")
-        new_name = user.first_name or user.username or "Usuario"
-        new_user = (user.username or "").lower()
-
-        name_changed = (prev_name and prev_name != new_name)
-        user_changed = (prev_user != new_user)
-
-        if not (name_changed or user_changed):
-            return
-
-        # Construir mensaje
-        mention = f'<a href="tg://user?id={user.id}">{html.escape(new_name)}</a>'
-        parts = []
-        if name_changed:
-            parts.append(f"📝 Nombre: <i>{html.escape(prev_name)}</i> → <b>{html.escape(new_name)}</b>")
-        if user_changed:
-            prev_u = f"@{prev_user}" if prev_user else "—"
-            new_u = f"@{new_user}" if new_user else "—"
-            parts.append(f"🔧 Usuario: <i>{html.escape(prev_u)}</i> → <b>{html.escape(new_u)}</b>")
-        text = f"🔔 {mention} ha cambiado su identidad:\n" + "\n".join(parts)
-        await context.bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
-
-        # Actualizar roster inmediatamente para no repetir aviso
-        chat_data[uid] = {
-            "name": new_name,
-            "username": new_user,
-            "last_ts": time.time(),
-            "messages": int(prev.get("messages", 0)) + 1,
-        }
-        roster[key] = chat_data
-        save_roster(roster)
-    except Exception as e:
-        logging.exception("Error en maybe_notify_name_change", exc_info=e)
 
 # =========================
 # MAIN
