@@ -159,10 +159,12 @@ def upsert_roster_member(chat_id: int, user) -> None:
     chat_data = roster.get(key, {})
     uid = str(user.id)
     name = user.first_name or user.username or "Usuario"
+    username = (user.username or "").lower()
     if uid not in chat_data:
-        chat_data[uid] = {"name": name, "last_ts": time.time(), "messages": 1}
+        chat_data[uid] = {"name": name, "username": username, "last_ts": time.time(), "messages": 1}
     else:
         chat_data[uid]["name"] = name
+        chat_data[uid]["username"] = username
         chat_data[uid]["last_ts"] = time.time()
         chat_data[uid]["messages"] = chat_data[uid].get("messages", 0) + 1
     roster[key] = chat_data
@@ -1598,6 +1600,52 @@ async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_q_answer(q, "No se pudo guardar. Inténtalo de nuevo.", show_alert=True)
         except Exception:
             pass
+
+
+async def maybe_notify_name_change(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, user) -> None:
+    # Toggled by /config -> "Aviso nombre/@"
+    if not enabled(chat_id, "notify_name_change", False):
+        return
+    try:
+        roster = load_roster()
+        key = str(chat_id)
+        chat_data = roster.get(key, {})
+        uid = str(user.id)
+        prev = chat_data.get(uid, {})
+        prev_name = str(prev.get("name") or "")
+        prev_user = str(prev.get("username") or "")
+        new_name = user.first_name or user.username or "Usuario"
+        new_user = (user.username or "").lower()
+
+        name_changed = (prev_name and prev_name != new_name)
+        user_changed = (prev_user != new_user)
+
+        if not (name_changed or user_changed):
+            return
+
+        # Construir mensaje
+        mention = f'<a href="tg://user?id={user.id}">{html.escape(new_name)}</a>'
+        parts = []
+        if name_changed:
+            parts.append(f"📝 Nombre: <i>{html.escape(prev_name)}</i> → <b>{html.escape(new_name)}</b>")
+        if user_changed:
+            prev_u = f"@{prev_user}" if prev_user else "—"
+            new_u = f"@{new_user}" if new_user else "—"
+            parts.append(f"🔧 Usuario: <i>{html.escape(prev_u)}</i> → <b>{html.escape(new_u)}</b>")
+        text = f"🔔 {mention} ha cambiado su identidad:\n" + "\n".join(parts)
+        await context.bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
+
+        # Actualizar roster inmediatamente para no repetir aviso
+        chat_data[uid] = {
+            "name": new_name,
+            "username": new_user,
+            "last_ts": time.time(),
+            "messages": int(prev.get("messages", 0)) + 1,
+        }
+        roster[key] = chat_data
+        save_roster(roster)
+    except Exception as e:
+        logging.exception("Error en maybe_notify_name_change", exc_info=e)
 
 # =========================
 # MAIN
