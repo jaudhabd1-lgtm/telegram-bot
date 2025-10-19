@@ -1632,6 +1632,20 @@ def build_hub_module_keyboard(code: str) -> InlineKeyboardMarkup:
 
 
 
+
+async def _hub_edit_message(q, text: str, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
+    try:
+        if q.message and q.message.photo:
+            return await q.message.edit_caption(caption=text, reply_markup=reply_markup, parse_mode=parse_mode)
+        else:
+            return await q.message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
+    except Exception:
+        # fallback: try sending a new message to avoid silent failure
+        try:
+            return await q.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
+        except Exception:
+            pass
+
 async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     data = q.data or ""
@@ -1641,7 +1655,7 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = data.split(":", 1)[1]
     if action == "back":
         try:
-            await q.message.edit_text("Elige un módulo para ver su ayuda:", reply_markup=build_hub_keyboard())
+            await _hub_edit_message(q, "Elige un módulo para ver su ayuda:", reply_markup=build_hub_keyboard())
         except Exception:
             pass
         return
@@ -1668,7 +1682,7 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         code = action.split(":", 1)[1]
         txt = hub_module_text(code)
         try:
-            await q.message.edit_text(txt, parse_mode="HTML", disable_web_page_preview=True, reply_markup=build_hub_module_keyboard(code))
+            await _hub_edit_message(q, txt, parse_mode="HTML", disable_web_page_preview=True, reply_markup=build_hub_module_keyboard(code))
         except Exception:
             pass
         return
