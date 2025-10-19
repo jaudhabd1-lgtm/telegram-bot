@@ -511,7 +511,13 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     arg = (context.args[0].lower() if context.args else "")
     if chat.type == ChatType.PRIVATE or arg == "hub":
         try:
-            await msg.reply_text("Elige un módulo para ver su ayuda:", reply_markup=build_hub_keyboard())
+            await context.bot.send_photo(
+            chat_id=msg.chat.id,
+            photo="https://raw.githubusercontent.com/jaudhabd1-lgtm/telegram-bot/main/start.jpg",
+            caption=(
+            "¡Hola! Soy RuruBot 🐸\n"
+            "¡Pulsa en los botones para ver información de los módulos y comandos disponibles!"),reply_markup=build_hub_keyboard()
+)
         except Exception:
             pass
         return
