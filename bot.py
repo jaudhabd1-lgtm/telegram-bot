@@ -20,7 +20,9 @@ TOKEN = os.getenv("TOKEN")
 PERSIST_DIR = os.environ.get("PERSIST_DIR", "/data").strip() or "."
 ROSTER_FILE = os.path.join(PERSIST_DIR, "roster.json")
 SETTINGS_FILE = os.path.join(PERSIST_DIR, "settings.json")
-# merge|seed
+LIST_URL = os.environ.get("LIST_URL", "")
+LIST_IMPORT_ONCE = os.environ.get("LIST_IMPORT_ONCE", "true").lower() in {"1","true","yes","y"}
+LIST_IMPORT_MODE = os.environ.get("LIST_IMPORT_MODE", "merge").lower() # merge|seed
 
 # =========================
 # ESTADO EN MEMORIA
@@ -72,74 +74,6 @@ def set_chat_setting(cid: int, key: str, value: Any) -> None:
 def is_spooky(cid: int) -> bool:
     cfg = get_chat_settings(cid)
     return bool(cfg.get("halloween", False))
-
-# Frases AFK (modo normal y modo Halloween)
-AFK_PHRASES_NORMAL = [
-    "💬 Estado AFK activado: el usuario está ausente.",
-    "🚪 El usuario se ha alejado del teclado.",
-    "💤 El usuario no está disponible en este momento.",
-    "🔕 Se ha activado el modo AFK.",
-    "⌨️ El teclado ha quedado sin dueño por ahora.",
-    "☕ Descanso temporal registrado.",
-    "🕐 Sin respuesta: ausencia detectada.",
-    "🌙 Modo ausente en curso.",
-    "🪑 Se registra ausencia en el sistema.",
-    "🕸️ Pausa iniciada: no se garantiza respuesta inmediata.",
-    "🔇 Usuario inactivo.",
-    "⏸️ Estado AFK: pausa momentánea."
-]
-
-
-
-AFK_RETURN_NORMAL = [
-    "🎉 Regreso confirmado: el usuario ha vuelto.",
-    "🔓 Modo AFK desactivado.",
-    "👋 El usuario vuelve a estar disponible.",
-    "🚀 Actividad retomada con éxito.",
-    "💫 Fin de la ausencia: regreso completado.",
-    "🔁 Usuario reincorporado al chat.",
-    "⚡ Conectividad restablecida.",
-    "✅ Estado operativo reactivado.",
-    "🧩 Sesión reanudada.",
-    "🔔 El usuario ha vuelto del modo AFK.",
-    "💬 Presencia detectada nuevamente.",
-    "📶 Señal restablecida: usuario activo."
-]
-
-
-
-AFK_PHRASES_SPOOKY = [
-    "🌒 El alma del usuario se desvanece entre sombras.",
-    "🕷️ El usuario ha sido reclamado por la oscuridad.",
-    "🕯️ Un velo cubre la presencia de este ser.",
-    "👻 Silencio espectral: el usuario ha desaparecido.",
-    "⚰️ El teclado queda abandonado, el eco responde solo.",
-    "🔮 Portal cerrado: el usuario se ha perdido en la niebla.",
-    "🌫️ Las sombras se apoderan del chat.",
-    "🕸️ La cripta se abre y el usuario desciende a la ausencia.",
-    "🦴 Maldición activa: silencio absoluto.",
-    "🕯️ Se ha ofrecido la voz al más allá.",
-    "🦇 Marca nocturna: el usuario se oculta entre tinieblas.",
-    "🌑 El farol se apaga; solo queda la oscuridad."
-]
-
-
-
-AFK_RETURN_SPOOKY = [
-    "🪄 Resurrección detectada: el ausente ha regresado.",
-    "🌕 Se rompe el hechizo: el alma vuelve al chat.",
-    "🧟‍♂️ Una figura emerge de las sombras.",
-    "🕯️ El silencio sepulcral ha terminado.",
-    "⚡ Regreso desde el inframundo completado.",
-    "🌘 El espectro reaparece con la primera luz.",
-    "⏳ Ascenso desde el más allá confirmado.",
-    "🕸️ La maldición se disipa; la voz retorna.",
-    "💀 El alma vuelve a reclamar su lugar entre los vivos.",
-    "🦇 El eco del ausente se hace presente.",
-    "🔔 Presencia espectral detectada nuevamente.",
-    "🌒 El portal se cierra: el espíritu ha vuelto."
-]
-
 
 # =========================
 # /help dinámico (formato BotFather)
@@ -280,6 +214,9 @@ def build_mentions_html(members: List[dict]) -> List[str]:
         chunks.append(", ".join(batch))
     return chunks
 
+ROSTER_LINE_RE = re.compile(r"^\s*\[?(\d+)\]?\s+(.+?)\s+\[?(-?\d+)\]?\s*$")
+
+
 def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
     if not url:
         return (None, {})
@@ -341,6 +278,51 @@ def _merge_roster(
             # mode "seed": no toca els existents
         out[uid] = cur
     return out
+
+def ensure_import_once():
+    if not LIST_URL:
+        return
+    ded_chat, parsed = _import_list(LIST_URL)
+    if not parsed or ded_chat is None:
+        return
+    cs = get_chat_settings(ded_chat)
+    if LIST_IMPORT_ONCE and cs.get("list_import_done"):
+        return
+    roster = load_roster()
+    key = str(ded_chat)
+    existing = roster.get(key, {})
+    if LIST_IMPORT_MODE == "seed" and existing:
+        pass
+    else:
+        merged = _merge_roster(existing, parsed, mode=LIST_IMPORT_MODE)
+        roster[key] = merged
+        save_roster(roster)
+    if LIST_IMPORT_ONCE:
+        set_chat_setting(ded_chat, "list_import_done", True)
+
+# =========================
+# TEXTOS (NORMAL vs HALLOWEEN)
+# =========================
+AFK_PHRASES_NORMAL = [
+    "{first} se ha puesto en modo AFK.",
+    "{first} está AFK. Deja tu recado.",
+    "{first} se ausenta un momento."
+]
+AFK_RETURN_NORMAL = [
+    "{first} ha vuelto 👋",
+    "{first} está de vuelta.",
+    "{first} ha regresado."
+]
+AFK_PHRASES_SPOOKY = [
+    "🎃 {first} se ha desvanecido entre la niebla… (AFK)",
+    "🕯️ {first} ha cruzado al reino de las sombras (AFK). Deja tu ofrenda.",
+    "🦇 {first} abandona el plano mortal un momento (AFK)."
+]
+AFK_RETURN_SPOOKY = [
+    "🧛‍♂️ {first} ha salido del ataúd. ¡Ha vuelto!",
+    "👻 {first} regresa desde el más allá.",
+    "🕸️ {first} ha roto el hechizo y está de vuelta."
+]
 
 def choose_afk_phrase(chat_id: int) -> str:
     return random.choice(AFK_PHRASES_SPOOKY if is_spooky(chat_id) else AFK_PHRASES_NORMAL)
@@ -1399,7 +1381,7 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg or not msg.from_user:
+    if not msg or not msg.from_user or not msg.text:
         return
     chat = msg.chat
     user = msg.from_user
@@ -1447,6 +1429,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 # =========================
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
+    ensure_import_once()
+
     # START / HELP / HALLOWEEN
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
@@ -1485,8 +1469,8 @@ def main():
     app.add_handler(CommandHandler("top_ttt", top_ttt_cmd))
 
     # CATCH-ALL
-    app.add_handler(MessageHandler(~filters.COMMAND, on_message), group=50)
-    
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message), group=50)
+
     # /help dinámico (formato BotFather)
     register_command("start", "muestra el mensaje de bienvenida del bot")
     register_command("help", "lista los comandos disponibles")
