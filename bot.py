@@ -304,24 +304,54 @@ def ensure_import_once():
 # TEXTOS (NORMAL vs HALLOWEEN)
 # =========================
 AFK_PHRASES_NORMAL = [
-    "{first} se ha puesto en modo AFK.",
-    "{first} está AFK. Deja tu recado.",
-    "{first} se ausenta un momento."
+    "💤 {first} se ha puesto en modo AFK.",
+    "📴 {first} está AFK. Deja tu recado.",
+    "🚪 {first} se ausenta un momento.",
+    "🌙 {first} se fue a contemplar el vacío un rato.",
+    "☕ {first} está en pausa café.",
+    "💻 {first} se ha quedado dormido sobre el teclado.",
+    "🚶‍♂️ {first} salió un segundo… o eso dijo.",
+    "📵 {first} desconectó para sobrevivir al mundo real.",
+    "🐸 {first} desapareció como un ninja.",
+    "🔕 {first} activó el modo silencio.",
+    "🪑 {first} dejó la silla girando todavía.",
+    "🌀 {first} salió a buscar sentido a la vida (volverá pronto)."
 ]
 AFK_RETURN_NORMAL = [
-    "{first} ha vuelto 👋",
-    "{first} está de vuelta.",
-    "{first} ha regresado."
+    "👋 {first} ha vuelto.",
+    "🎉 {first} está de vuelta.",
+    "💫 {first} ha regresado.",
+    "🔥 {first} ha vuelto al mundo digital.",
+    "✨ {first} ha reaparecido mágicamente.",
+    "🚀 {first} ha aterrizado de nuevo.",
+    "🧃 {first} volvió, con su bebida en la mano.",
+    "🌈 {first} regresa con energía renovada.",
+    "🐾 {first} ha encontrado el camino de regreso.",
+    "🎊 {first} ha regresado triunfalmente."
 ]
 AFK_PHRASES_SPOOKY = [
     "🎃 {first} se ha desvanecido entre la niebla… (AFK)",
     "🕯️ {first} ha cruzado al reino de las sombras (AFK). Deja tu ofrenda.",
-    "🦇 {first} abandona el plano mortal un momento (AFK)."
+    "🦇 {first} abandona el plano mortal un momento (AFK).",
+    "🕸️ {first} ha quedado atrapado en una telaraña maldita.",
+    "🧙‍♂️ {first} ha sido invocado a otra dimensión.",
+    "☠️ {first} está realizando un ritual prohibido.",
+    "⚰️ {first} descansa en su ataúd temporalmente.",
+    "👁️‍🗨️ {first} fue reclamado por las tinieblas.",
+    "🌑 {first} camina bajo la luna llena (modo AFK).",
+    "🪦 {first} yace entre susurros del más allá."
 ]
 AFK_RETURN_SPOOKY = [
     "🧛‍♂️ {first} ha salido del ataúd. ¡Ha vuelto!",
     "👻 {first} regresa desde el más allá.",
-    "🕸️ {first} ha roto el hechizo y está de vuelta."
+    "🕸️ {first} ha roto el hechizo y está de vuelta.",
+    "⚡ {first} ha resucitado con un trueno.",
+    "🪞 {first} cruzó el espejo y volvió al chat.",
+    "🕯️ {first} ha regresado con una nueva maldición.",
+    "🪶 {first} vuelve dejando un rastro de plumas oscuras.",
+    "💀 {first} ha escapado del inframundo.",
+    "🌘 {first} regresó cuando la luna lo permitió.",
+    "🔮 {first} reaparece entre humo y susurros."
 ]
 
 def choose_afk_phrase(chat_id: int) -> str:
