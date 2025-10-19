@@ -90,15 +90,6 @@ def format_commands_list_botfather() -> str:
     return "\n".join(lines) if lines else "/empty"
 
 # =========================
-
-
-def enabled(chat_id: int, key: str, default: bool) -> bool:
-    try:
-        cfg = get_chat_settings(chat_id)
-        return bool(cfg.get(key, default))
-    except Exception:
-        return default
-
 # UTILS
 # =========================
 def format_duration(seconds: float) -> str:
@@ -152,7 +143,6 @@ def save_roster(roster: dict) -> None:
     except Exception as e:
         logging.exception("No se pudo guardar roster", exc_info=e)
 
-
 def upsert_roster_member(chat_id: int, user) -> None:
     if not user:
         return
@@ -161,12 +151,10 @@ def upsert_roster_member(chat_id: int, user) -> None:
     chat_data = roster.get(key, {})
     uid = str(user.id)
     name = user.first_name or user.username or "Usuario"
-    username = (user.username or "").lower()
     if uid not in chat_data:
-        chat_data[uid] = {"name": name, "username": username, "last_ts": time.time(), "messages": 1}
+        chat_data[uid] = {"name": name, "last_ts": time.time(), "messages": 1}
     else:
         chat_data[uid]["name"] = name
-        chat_data[uid]["username"] = username
         chat_data[uid]["last_ts"] = time.time()
         chat_data[uid]["messages"] = chat_data[uid].get("messages", 0) + 1
     roster[key] = chat_data
@@ -516,9 +504,25 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
 # =========================
 # START / HELP / HALLOWEEN
 # =========================
+
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    spooky = is_spooky(msg.chat.id)
+    chat = msg.chat
+    arg = (context.args[0].lower() if context.args else "")
+    if chat.type == ChatType.PRIVATE or arg == "hub":
+        try:
+            await msg.reply_text("Elige un módulo para ver su ayuda:", reply_markup=build_hub_keyboard())
+        except Exception:
+            pass
+        return
+    try:
+        username = (await context.bot.get_me()).username
+        url = f"https://t.me/{username}?start=hub"
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
+        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos.", reply_markup=kb)
+    except Exception:
+        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos: busca mi perfil y pulsa Iniciar.")
+    return
 
     # Deep link: t.me/<bot>?start=help → muestra la ayuda directamente
     if context.args and context.args[0].lower() == "help":
@@ -1398,11 +1402,6 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = msg.chat
     user = msg.from_user
 
-    # SangMata: notifica si han cambiado nombre/@
-    try:
-        await maybe_notify_name_change(update, context, chat.id, user)
-    except Exception:
-        logging.exception("maybe_notify_name_change falló")
     # roster
     upsert_roster_member(chat.id, user)
     if msg.reply_to_message and msg.reply_to_message.from_user:
@@ -1452,7 +1451,7 @@ MODULES: Dict[str, Dict[str, str]] = {
     "autoresp": {"key": "autoresponder_enabled", "label": "Autoresponder"},
     "ttt": {"key": "ttt_enabled", "label": "TTT"},
     "trivia": {"key": "trivia_enabled", "label": "Trivia"},
-    "namechg": {"key": "notify_name_change", "label": "SangMata"},
+    "namechg": {"key": "notify_name_change", "label": "Aviso nombre/@"},
     "halloween": {"key": "halloween", "label": "Halloween"},
 }
 
@@ -1574,53 +1573,100 @@ async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-async def maybe_notify_name_change(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, user) -> None:
-        # Controlado por /config → "SangMata" (notify_name_change)
-        if not enabled(chat_id, "notify_name_change", False):
-            return
+# =========================
+# /START — HUB en privado
+# =========================
+HUB_MODULES = {
+    "afk": {"title": "AFK", "desc": "Activa el modo ausente con un mensaje automático y aviso al volver.", "cmds": ["afk [motivo]"]},
+    "all": {"title": "@all", "desc": "Menciona a todos los miembros del grupo con control anti-spam.", "cmds": ["@all [motivo]"]},
+    "admin": {"title": "@admin", "desc": "Avisa solo al equipo de administradores.", "cmds": ["@admin [motivo]"]},
+    "autoresp": {"title": "Autoresponder", "desc": "Respuestas automáticas personalizadas por usuario.", "cmds": ["autoresponder", "autoresponder_off"]},
+    "ttt": {"title": "Tres en raya", "desc": "Juega partidas de TTT con el grupo y consulta clasificaciones.", "cmds": ["ttt", "top_ttt"]},
+    "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_on", "trivia_off", "trivia_stats"]},
+    "namechg": {"title": "SangMata", "desc": "Notifica cambios de nombre y @ cuando la persona habla en el grupo.", "cmds": []},
+    "halloween": {"title": "Halloween", "desc": "Cambia el tema de los mensajes del bot.", "cmds": ["halloween on|off"]},
+}
+
+
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+def build_hub_keyboard() -> InlineKeyboardMarkup:
+    codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg", "halloween"]
+    rows = []
+    for i in range(0, len(codes), 2):
+        chunk = codes[i:i+2]
+        rows.append([InlineKeyboardButton(HUB_MODULES[c]["title"], callback_data=f"hub:m:{c}") for c in chunk])
+    rows.append([InlineKeyboardButton("⚙️ Configuración", callback_data="hub:cfg"), InlineKeyboardButton("📜 Ver comandos", callback_data="hub:help")])
+    rows.append([InlineKeyboardButton("❌ Cerrar", callback_data="hub:x")])
+    return InlineKeyboardMarkup(rows)
+
+def hub_module_text(code: str) -> str:
+    m = HUB_MODULES.get(code)
+    if not m:
+        return "Módulo desconocido."
+    title = m["title"]
+    desc = m["desc"]
+    cmds = m.get("cmds", [])
+    lines = [f"🔹 <b>{title}</b>", desc]
+    if cmds:
+        lines.append("\n<b>Comandos:</b>")
+        for c in cmds:
+            cfmt = f"/{c}" if not c.startswith('@') and not c.startswith('/') else c
+            lines.append(f"• {cfmt}")
+    lines.append("\nActívalo o desactívalo desde /config en tu grupo.")
+    return "\n".join(lines)
+
+def build_hub_module_keyboard(code: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Volver", callback_data="hub:back")],
+        [InlineKeyboardButton("⚙️ Configuración", callback_data="hub:cfg"), InlineKeyboardButton("📜 Ver comandos", callback_data="hub:help")],
+        [InlineKeyboardButton("❌ Cerrar", callback_data="hub:x")],
+    ])
+
+
+
+async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    data = q.data or ""
+    await q.answer()
+    if not data.startswith("hub:"):
+        return
+    action = data.split(":", 1)[1]
+    if action == "back":
         try:
-            roster = load_roster()
-            key = str(chat_id)
-            chat_data = roster.get(key, {})
-            uid = str(user.id)
-            prev = chat_data.get(uid, {})
+            await q.message.edit_text("Elige un módulo para ver su ayuda:", reply_markup=build_hub_keyboard())
+        except Exception:
+            pass
+        return
+    if action == "help":
+        fake_update = Update(update.update_id, message=q.message)
+        try:
+            await help_cmd(fake_update, context)
+        except Exception:
+            pass
+        return
+    if action == "cfg":
+        try:
+            await q.message.reply_text("Abre /config en el grupo donde seas administrador para activar/desactivar módulos.")
+        except Exception:
+            pass
+        return
+    if action == "x":
+        try:
+            await q.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+    if action.startswith("m:"):
+        code = action.split(":", 1)[1]
+        txt = hub_module_text(code)
+        try:
+            await q.message.edit_text(txt, parse_mode="HTML", disable_web_page_preview=True, reply_markup=build_hub_module_keyboard(code))
+        except Exception:
+            pass
+        return
 
-            prev_name = str(prev.get("name") or "").strip()
-            prev_user = str(prev.get("username") or "").lower().strip()
-
-            fn = (user.first_name or "").strip()
-            ln = (getattr(user, "last_name", None) or "").strip()
-            now_name = (f"{fn} {ln}".strip() if ln else fn) or (user.username or "Usuario")
-            now_user = (user.username or "").lower().strip()
-
-            name_changed = bool(prev_name) and (prev_name != now_name)
-            user_changed = (prev_user != now_user)
-
-            if not (name_changed or user_changed):
-                return
-
-            mention = f'<a href="tg://user?id={user.id}">{html.escape(now_name)}</a>'
-            parts = []
-            if name_changed:
-                parts.append(f"📝 Nombre: <i>{html.escape(prev_name or '—')}</i> → <b>{html.escape(now_name)}</b>")
-            if user_changed:
-                old_u = f"@{prev_user}" if prev_user else "—"
-                new_u = f"@{now_user}" if now_user else "—"
-                parts.append(f"🔧 Usuario: <i>{html.escape(old_u)}</i> → <b>{html.escape(new_u)}</b>")
-            text = "🔔 {} ha cambiado su identidad:\n{}".format(mention, "\n".join(parts))
-            await context.bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
-
-            # Actualiza roster para no repetir el aviso
-            chat_data[uid] = {
-                "name": now_name,
-                "username": now_user,
-                "last_ts": time.time(),
-                "messages": int(prev.get("messages", 0)) + 1,
-            }
-            roster[key] = chat_data
-            save_roster(roster)
-        except Exception as e:
-            logging.exception("Error en SangMata (maybe_notify_name_change)", exc_info=e)
 # =========================
 # MAIN
 # =========================
@@ -1633,6 +1679,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("config", config_cmd))
     app.add_handler(CallbackQueryHandler(callback_show_help, pattern=r"^show_help$"))
+    app.add_handler(CallbackQueryHandler(hub_router, pattern=r"^hub:"))
     app.add_handler(CallbackQueryHandler(cfg_callback, pattern=r"^cfg:"))
     app.add_handler(CommandHandler("halloween", halloween_cmd))
 
