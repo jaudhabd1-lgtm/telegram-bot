@@ -1465,33 +1465,34 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = msg.chat
     user = msg.from_user
 
-# SangMata: notify on name/@ changes when user speaks and module enabled
-try:
-    cfg = _with_defaults(get_chat_settings(chat.id))
-    if cfg.get("notify_name_change", False):
-        changes = _detect_name_changes(chat.id, user)
-        if changes.get("changed"):
-            parts = []
-            mention = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name or "usuario")}</a>'
-            if changes.get("old_first") != changes.get("new_first"):
-                old = html.escape(changes.get("old_first") or "—")
-                new = html.escape(changes.get("new_first") or "—")
-                parts.append(f"🪪 {mention} ha cambiado su nombre: <b>{old}</b> → <b>{new}</b>")
-            if changes.get("old_user") != changes.get("new_user"):
-                oldu = ("@" + changes.get("old_user")) if changes.get("old_user") else "—"
-                newu = ("@" + changes.get("new_user")) if changes.get("new_user") else "—"
-                parts.append(f"🔁 Nuevo @usuario: <code>{oldu}</code> → <code>{newu}</code>")
-            if parts:
-                try:
-                    await context.bot.send_message(chat_id=chat.id, text="\n".join(parts), parse_mode="HTML", disable_web_page_preview=True)
-                except Exception:
-                    pass
-except Exception:
-    pass
-
-
-
-
+    # SangMata: notify on name/@ changes when user speaks and module enabled
+    try:
+        cfg = _with_defaults(get_chat_settings(chat.id))
+        if cfg.get("notify_name_change", False):
+            changes = _detect_name_changes(chat.id, user)
+            if changes.get("changed"):
+                parts = []
+                mention = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name or "usuario")}</a>'
+                if changes.get("old_first") != changes.get("new_first"):
+                    old = html.escape(changes.get("old_first") or "—")
+                    new = html.escape(changes.get("new_first") or "—")
+                    parts.append(f"🪪 {mention} ha cambiado su nombre: <b>{old}</b> → <b>{new}</b>")
+                if changes.get("old_user") != changes.get("new_user"):
+                    oldu = ("@" + changes.get("old_user")) if changes.get("old_user") else "—"
+                    newu = ("@" + changes.get("new_user")) if changes.get("new_user") else "—"
+                    parts.append(f"🔁 Nuevo @usuario: <code>{oldu}</code> → <code>{newu}</code>")
+                if parts:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=chat.id,
+                            text="\n".join(parts),
+                            parse_mode="HTML",
+                            disable_web_page_preview=True
+                        )
+                    except Exception:
+                        pass
+    except Exception:
+        pass
 
     # roster
     upsert_roster_member(chat.id, user)
