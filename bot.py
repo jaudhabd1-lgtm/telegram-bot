@@ -143,6 +143,29 @@ def save_roster(roster: dict) -> None:
     except Exception as e:
         logging.exception("No se pudo guardar roster", exc_info=e)
 
+# --- Name change detection (SangMata-like) ---
+def _detect_name_changes(chat_id: int, user) -> dict:
+    # Detects changes between the last stored identity and current one.
+    # Returns a dict with keys: changed(bool), old_first, new_first, old_user, new_user.
+    roster = load_roster()
+    chat_data = roster.get(str(chat_id), {})
+    rec = chat_data.get(str(user.id)) or {}
+    old_first = rec.get("first") or None
+    old_user = (rec.get("username") or None)
+    new_first = (user.first_name or None)
+    new_user = ((user.username or "").lower() or None)
+    changed = False
+    if old_first != new_first:
+        changed = True
+    if old_user != new_user:
+        changed = True
+    return {
+        "changed": changed,
+        "old_first": old_first, "new_first": new_first,
+        "old_user": old_user, "new_user": new_user
+    }
+
+
 def upsert_roster_member(chat_id: int, user) -> None:
     if not user:
         return
@@ -150,13 +173,17 @@ def upsert_roster_member(chat_id: int, user) -> None:
     key = str(chat_id)
     chat_data = roster.get(key, {})
     uid = str(user.id)
-    name = user.first_name or user.username or "Usuario"
-    if uid not in chat_data:
-        chat_data[uid] = {"name": name, "last_ts": time.time(), "messages": 1}
-    else:
-        chat_data[uid]["name"] = name
-        chat_data[uid]["last_ts"] = time.time()
-        chat_data[uid]["messages"] = chat_data[uid].get("messages", 0) + 1
+    # Always store both first name and username (lowercase for compare), and keep a display name for legacy uses
+    first = user.first_name or "Usuario"
+    username = (user.username or "").lower() or None
+    display = user.first_name or (("@" + username) if username else "Usuario")
+    rec = chat_data.get(uid) or {}
+    rec["first"] = first
+    rec["username"] = username  # may be None
+    rec["name"] = display
+    rec["last_ts"] = time.time()
+    rec["messages"] = int(rec.get("messages", 0)) + 1 if "messages" in rec else 1
+    chat_data[uid] = rec
     roster[key] = chat_data
     save_roster(roster)
 
@@ -1437,6 +1464,32 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     chat = msg.chat
     user = msg.from_user
+
+# SangMata: notify on name/@ changes when user speaks and module enabled
+try:
+    cfg = _with_defaults(get_chat_settings(chat.id))
+    if cfg.get("notify_name_change", False):
+        changes = _detect_name_changes(chat.id, user)
+        if changes.get("changed"):
+            parts = []
+            mention = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name or "usuario")}</a>'
+            if changes.get("old_first") != changes.get("new_first"):
+                old = html.escape(changes.get("old_first") or "—")
+                new = html.escape(changes.get("new_first") or "—")
+                parts.append(f"🪪 {mention} ha cambiado su nombre: <b>{old}</b> → <b>{new}</b>")
+            if changes.get("old_user") != changes.get("new_user"):
+                oldu = ("@" + changes.get("old_user")) if changes.get("old_user") else "—"
+                newu = ("@" + changes.get("new_user")) if changes.get("new_user") else "—"
+                parts.append(f"🔁 Nuevo @usuario: <code>{oldu}</code> → <code>{newu}</code>")
+            if parts:
+                try:
+                    await context.bot.send_message(chat_id=chat.id, text="\n".join(parts), parse_mode="HTML", disable_web_page_preview=True)
+                except Exception:
+                    pass
+except Exception:
+    pass
+
+
 
     # roster
     upsert_roster_member(chat.id, user)
