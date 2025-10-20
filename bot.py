@@ -1491,6 +1491,8 @@ except Exception:
 
 
 
+
+
     # roster
     upsert_roster_member(chat.id, user)
     if msg.reply_to_message and msg.reply_to_message.from_user:
