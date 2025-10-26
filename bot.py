@@ -1267,6 +1267,11 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     - Si pasas @usuario en args, reto directo.
     - Si no, partida abierta (botón Unirme).
     """
+
+    # Respect module toggle
+if not is_module_enabled(chat.id, "ttt_enabled"):
+    return await msg.reply_text("El módulo TTT está desactivado en este chat.")
+    
     msg = update.message
     chat = msg.chat
     spooky = is_spooky(chat.id)
@@ -1439,6 +1444,10 @@ async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         action = parts[1]
         chat_id = int(parts[2])
         msg_id = int(parts[3])
+        # Denegar callbacks si el módulo está desactivado
+        if not is_module_enabled(chat_id, "ttt_enabled"):
+            return await safe_q_answer(q, "El módulo TTT está desactivado en este chat.", show_alert=True)
+        
         if action == "play":
             idx = int(parts[4]); return await ttt_play_cb(update, context, chat_id, msg_id, idx)
         elif action == "join":
