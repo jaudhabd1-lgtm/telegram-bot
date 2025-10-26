@@ -1,13 +1,22 @@
-# (Contenido completo del fichero actualizado)
-import os, json, time, random, asyncio, logging, re, html, unicodedata
+# (Contenido completo del fichero actualizado - optimizado)
+import os
+import json
+import time
+import random
+import asyncio
+import logging
+import re
+import html
+import unicodedata
 from datetime import datetime
 from typing import List, Dict, Any
 from zoneinfo import ZoneInfo
+
 import pytz
 import country_converter as coco
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ChatType, ChatMemberStatus
+from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
@@ -22,8 +31,8 @@ PERSIST_DIR = os.environ.get("PERSIST_DIR", "/data").strip() or "."
 ROSTER_FILE = os.path.join(PERSIST_DIR, "roster.json")
 SETTINGS_FILE = os.path.join(PERSIST_DIR, "settings.json")
 LIST_URL = os.environ.get("LIST_URL", "")
-LIST_IMPORT_ONCE = os.environ.get("LIST_IMPORT_ONCE", "true").lower() in {"1","true","yes","y"}
-LIST_IMPORT_MODE = os.environ.get("LIST_IMPORT_MODE", "merge").lower() # merge|seed
+LIST_IMPORT_ONCE = os.environ.get("LIST_IMPORT_ONCE", "true").lower() in {"1", "true", "yes", "y"}
+LIST_IMPORT_MODE = os.environ.get("LIST_IMPORT_MODE", "merge").lower()  # merge|seed
 
 # =========================
 # ESTADO EN MEMORIA
@@ -32,7 +41,7 @@ AFK_USERS: Dict[int, Dict[str, Any]] = {}
 AUTO_RESPONDERS: Dict[int, Dict[int, str]] = {}
 _last_all: Dict[int, float] = {}
 _admin_last: Dict[int, float] = {}
-COMMANDS: dict[str, dict] = {}  # para /help dinámico
+COMMANDS: Dict[str, Dict[str, Any]] = {}  # para /help dinámico
 
 # ====== TRES EN RAYA ======
 TTT_GAMES: Dict[int, Dict[int, Dict[str, Any]]] = {}  # {chat_id: {message_id: game_state}}
@@ -43,21 +52,37 @@ TTT_O = "⭕"
 logging.basicConfig(level=logging.INFO)
 
 # =========================
-# SETTINGS (por chat)
+# CACHES PARA FICHEROS
+SETTINGS_CACHE: Dict[str, Any] | None = None
+ROSTER_CACHE: Dict[str, Any] | None = None
+
 # =========================
+# SETTINGS (por chat)
 def load_settings() -> Dict[str, Any]:
+    global SETTINGS_CACHE
+    if SETTINGS_CACHE is not None:
+        # return shallow copy to avoid accidental external mutation
+        return dict(SETTINGS_CACHE)
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                SETTINGS_CACHE = json.load(f)
+                if not isinstance(SETTINGS_CACHE, dict):
+                    SETTINGS_CACHE = {}
+                return dict(SETTINGS_CACHE)
         except Exception:
+            SETTINGS_CACHE = {}
             return {}
+    SETTINGS_CACHE = {}
     return {}
 
 def save_settings(s: Dict[str, Any]) -> None:
+    global SETTINGS_CACHE
     try:
+        os.makedirs(os.path.dirname(SETTINGS_FILE) or ".", exist_ok=True)
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(s, f, ensure_ascii=False, indent=2)
+        SETTINGS_CACHE = dict(s)
     except Exception as e:
         logging.exception("No se pudo guardar settings", exc_info=e)
 
@@ -68,7 +93,8 @@ def get_chat_settings(cid: int) -> Dict[str, Any]:
 def set_chat_setting(cid: int, key: str, value: Any) -> None:
     s = load_settings()
     ckey = str(cid)
-    if ckey not in s: s[ckey] = {}
+    if ckey not in s:
+        s[ckey] = {}
     s[ckey][key] = value
     save_settings(s)
 
@@ -76,9 +102,9 @@ def is_spooky(cid: int) -> bool:
     cfg = get_chat_settings(cid)
     return bool(cfg.get("halloween", False))
 
+
 # =========================
 # /help dinámico (formato BotFather)
-# =========================
 def register_command(name: str, desc: str, admin: bool = False) -> None:
     COMMANDS[name] = {"desc": desc, "admin": admin}
 
@@ -90,19 +116,23 @@ def format_commands_list_botfather() -> str:
         lines.append(f"{name}{admin_tag} - {info.get('desc')}")
     return "\n".join(lines) if lines else "/empty"
 
+
 # =========================
 # UTILS
-# =========================
 def format_duration(seconds: float) -> str:
     seconds = int(seconds)
     d, rem = divmod(seconds, 86400)
     h, rem = divmod(rem, 3600)
     m, s = divmod(rem, 60)
     parts = []
-    if d: parts.append(f"{d}d")
-    if h: parts.append(f"{h}h")
-    if m: parts.append(f"{m}m")
-    if not parts: parts.append(f"{s}s")
+    if d:
+        parts.append(f"{d}d")
+    if h:
+        parts.append(f"{h}h")
+    if m:
+        parts.append(f"{m}m")
+    if not parts:
+        parts.append(f"{s}s")
     return " ".join(parts)
 
 async def is_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
@@ -120,38 +150,48 @@ async def safe_q_answer(q, text: str | None = None, show_alert: bool = False):
     except Exception:
         pass
 
-# NUEVO: helper para deep-link y nombre del bot
 async def _bot_username(context: ContextTypes.DEFAULT_TYPE) -> str:
     if getattr(context.bot, "username", None):
         return context.bot.username
     me = await context.bot.get_me()
     return me.username
 
-# NUEVO: helper para comprobar si un módulo está activado en un chat
 def is_module_enabled(chat_id: int, key: str) -> bool:
     cfg = _with_defaults(get_chat_settings(chat_id))
     return bool(cfg.get(key, DEFAULTS.get(key, False)))
 
+
 # =========================
-# ROSTER
+# ROSTER (con cache)
 def load_roster() -> dict:
-    try:
-        with open(ROSTER_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    global ROSTER_CACHE
+    if ROSTER_CACHE is not None:
+        return dict(ROSTER_CACHE)
+    if os.path.exists(ROSTER_FILE):
+        try:
+            with open(ROSTER_FILE, "r", encoding="utf-8") as f:
+                ROSTER_CACHE = json.load(f)
+                if not isinstance(ROSTER_CACHE, dict):
+                    ROSTER_CACHE = {}
+                return dict(ROSTER_CACHE)
+        except Exception:
+            ROSTER_CACHE = {}
+            return {}
+    ROSTER_CACHE = {}
+    return {}
 
 def save_roster(roster: dict) -> None:
+    global ROSTER_CACHE
     try:
+        os.makedirs(os.path.dirname(ROSTER_FILE) or ".", exist_ok=True)
         with open(ROSTER_FILE, "w", encoding="utf-8") as f:
             json.dump(roster, f, ensure_ascii=False, indent=2)
+        ROSTER_CACHE = dict(roster)
     except Exception as e:
         logging.exception("No se pudo guardar roster", exc_info=e)
 
 # --- Name change detection (SangMata-like) ---
 def _detect_name_changes(chat_id: int, user) -> dict:
-    # Detects changes between the last stored identity and current one.
-    # Returns a dict with keys: changed(bool), old_first, new_first, old_user, new_user.
     roster = load_roster()
     chat_data = roster.get(str(chat_id), {})
     rec = chat_data.get(str(user.id)) or {}
@@ -178,7 +218,6 @@ def upsert_roster_member(chat_id: int, user) -> None:
     key = str(chat_id)
     chat_data = roster.get(key, {})
     uid = str(user.id)
-    # Always store both first name and username (lowercase for compare), and keep a display name for legacy uses
     first = user.first_name or "Usuario"
     username = (user.username or "").lower() or None
     display = user.first_name or (("@" + username) if username else "Usuario")
@@ -241,7 +280,8 @@ def build_mentions_html(members: List[dict]) -> List[str]:
         mention = f'<a href="tg://user?id={uid}">{html.escape(name)}</a>'
         batch.append(mention)
         if i % 20 == 0:
-            chunks.append(", ".join(batch)); batch = []
+            chunks.append(", ".join(batch))
+            batch = []
     if batch:
         chunks.append(", ".join(batch))
     return chunks
@@ -254,7 +294,6 @@ def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
         return (None, {})
     try:
         from urllib.request import urlopen
-        # from urllib.error import URLError, HTTPError  # opcional si vols tractar errors específics
         with urlopen(url, timeout=15) as r:
             content = r.read().decode("utf-8", errors="replace")
     except Exception:
@@ -278,7 +317,7 @@ def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
         name = middle
         if middle.startswith("@"):
             username = middle[1:]
-            name = middle  # si vols, podries posar name = username
+            name = middle
         parsed[uid] = {
             "name": name,
             "username": username,
@@ -289,6 +328,7 @@ def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
     m = re.search(r"list_(\-?\d+)\.txt", url)
     chat_id = int(m.group(1)) if m else None
     return (chat_id, parsed)
+
 def _merge_roster(
     existing: dict[str, dict[str, Any]],
     incoming: dict[str, dict[str, Any]],
@@ -307,7 +347,6 @@ def _merge_roster(
                 cur["name"] = pdata["name"]
             cur["messages"] = max(int(cur.get("messages", 0)), int(pdata.get("messages", 0)))
             cur["last_ts"] = max(float(cur.get("last_ts", 0.0)), float(pdata.get("last_ts", 0.0)))
-            # mode "seed": no toca els existents
         out[uid] = cur
     return out
 
@@ -331,6 +370,7 @@ def ensure_import_once():
         save_roster(roster)
     if LIST_IMPORT_ONCE:
         set_chat_setting(ded_chat, "list_import_done", True)
+
 
 # =========================
 # TEXTOS (NORMAL vs HALLOWEEN)
@@ -412,7 +452,7 @@ def txt_help_triggers(spooky: bool) -> str:
                 "hora [país] — hora del país (por defecto España)\n"
                 "🛡️ @all [motivo] — invocar a todas las almas\n"
                 "@admin [motivo] — llamar al aquelarre de administradores")
-    return ("\n\nAtajos sin barra (informativo):\n"
+    return ("\n\nAtajos sin barra (informativo):\n            "
             "brb / afk — activa afk\n"
             "hora [país] — hora del país (por defecto España)\n"
             "🛡️ @all [motivo] — mencionar a todos\n"
@@ -436,7 +476,8 @@ def txt_all_cooldown(spooky: bool) -> str:
 def txt_all_header(spooky: bool, by_first: str, extra: str) -> str:
     base = ("👻 @all invocado por " if spooky else "@all por ")
     out = f"{base}{by_first}"
-    if extra: out += f": {extra}"
+    if extra:
+        out += f": {extra}"
     return out
 
 def txt_motivo_label(spooky: bool) -> str:
@@ -499,7 +540,8 @@ def txt_admin_cooldown(spooky: bool) -> str:
 def txt_admin_header(spooky: bool, by_first: str, extra: str) -> str:
     base = ("🦇 @admin invocado por " if spooky else "@admin por ")
     out = f"{base}{by_first}"
-    if extra: out += f": {extra}"
+    if extra:
+        out += f": {extra}"
     return out
 
 def txt_no_admins(spooky: bool) -> str:
@@ -562,33 +604,14 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
         return f"🕰️ En {flag} {country} son las {hhmmss}. (resuenan campanas a lo lejos)"
     return f"En {flag} {country} son las {hhmmss}."
 
+
 # =========================
 # START / HELP / HALLOWEEN
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = msg.chat
-    arg = (context.args[0].lower() if context.args else "")
-    if chat.type == ChatType.PRIVATE or arg == "hub":
-        try:
-            await context.bot.send_photo(
-            chat_id=msg.chat.id,
-            photo="https://raw.githubusercontent.com/jaudhabd1-lgtm/telegram-bot/main/start.jpg",
-            caption=(
-            "¡Hola! Soy RuruBot 🐸\n"
-            "¡Pulsa en los botones para ver información de los módulos y comandos disponibles!"),reply_markup=build_hub_keyboard()
-)
-        except Exception:
-            pass
-        return
-    try:
-        username = (await context.bot.get_me()).username
-        url = f"https://t.me/{username}?start=hub"
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
-        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos.", reply_markup=kb)
-    except Exception:
-        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos: busca mi perfil y pulsa Iniciar.")
-    return
+    arg0 = (context.args[0].lower() if context.args else "")
 
     # Deep link: t.me/<bot>?start=help → muestra la ayuda directamente
     if context.args and context.args[0].lower() == "help":
@@ -599,12 +622,29 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await msg.reply_text("📬 Contáctame en privado para ver la ayuda.", reply_markup=kb)
         return await help_cmd(update, context)
 
-    if msg.chat.type == ChatType.PRIVATE:
-        text = txt_start_private(is_spooky(msg.chat.id))
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📖 Ver comandos", callback_data="show_help")]])
-        await msg.reply_text(text, reply_markup=kb)
-    else:
-        await msg.reply_text(txt_start_group(is_spooky(msg.chat.id)))
+    if chat.type == ChatType.PRIVATE or arg0 == "hub":
+        try:
+            await context.bot.send_photo(
+                chat_id=msg.chat.id,
+                photo="https://raw.githubusercontent.com/jaudhabd1-lgtm/telegram-bot/main/start.jpg",
+                caption=(
+                    "¡Hola! Soy RuruBot 🐸\n"
+                    "¡Pulsa en los botones para ver información de los módulos y comandos disponibles!"),
+                reply_markup=build_hub_keyboard()
+            )
+        except Exception:
+            pass
+        return
+
+    try:
+        username = (await context.bot.get_me()).username
+        url = f"https://t.me/{username}?start=hub"
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
+        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos.", reply_markup=kb)
+    except Exception:
+        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos: busca mi perfil y pulsa Iniciar.")
+    return
+
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -620,13 +660,12 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"https://t.me/{username}?start=help"
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
         m = await msg.reply_text(text, reply_markup=kb, disable_web_page_preview=True)
-        # Borrar en 20s para no ensuciar el chat
         try:
             async def _del():
                 await asyncio.sleep(20)
                 try:
                     await m.delete()
-                except:
+                except Exception:
                     pass
             asyncio.create_task(_del())
         except Exception:
@@ -651,7 +690,6 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await safe_q_answer(q)
-    # Reutiliza help_cmd para mantener formato
     fake_update = Update(update.update_id, message=q.message)
     await help_cmd(fake_update, context)
 
@@ -673,6 +711,7 @@ async def halloween_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await msg.reply_text(f"🎃 Estado de Halloween: {cur}")
     await msg.reply_text("Uso: /halloween on | off | status")
 
+
 # =========================
 # AFK
 async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -693,7 +732,8 @@ async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg or not msg.text: return
+    if not msg or not msg.text:
+        return
 
     # Respect module toggle
     if not is_module_enabled(msg.chat.id, "afk_enabled"):
@@ -701,7 +741,8 @@ async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     t = msg.text.strip()
     m = re.match(r"(?is)^\s*(brb|afk)\b[^\S\r\n]*(.*)$", t)
-    if not m: return
+    if not m:
+        return
     reason = m.group(2).strip()
     context.args = reason.split() if reason else []
     context.user_data["afk_skip_message_id"] = msg.message_id
@@ -709,42 +750,45 @@ async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg: return
+    if not msg:
+        return
 
     # Respect module toggle
     if not is_module_enabled(msg.chat.id, "afk_enabled"):
         return
 
     spooky = is_spooky(msg.chat.id)
-    # reply target
     if msg.reply_to_message and msg.reply_to_message.from_user:
         target = msg.reply_to_message.from_user
         if target.id in AFK_USERS:
             data = AFK_USERS[target.id]
-            since = data.get("since"); reason = data.get("reason")
+            since = data.get("since")
+            reason = data.get("reason")
             dur = format_duration(time.time() - since)
             base = "💤👻 " if spooky else "💤 "
             txt = f"{base}{target.first_name} está AFK desde {dur}."
             if reason:
                 txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
             await msg.reply_text(txt)
-    # mentions
     if not msg.entities:
         return
     afk_by_username = {(info.get("username") or ""): uid for uid, info in AFK_USERS.items() if info.get("username")}
     for ent in msg.entities:
         if ent.type == "mention":
-            username = msg.text[ent.offset+1:ent.offset+ent.length].lower()
+            username = msg.text[ent.offset + 1:ent.offset + ent.length].lower()
             uid = afk_by_username.get(username)
             if uid:
                 info = AFK_USERS[uid]
-                first = info.get("first_name"); since = info.get("since"); reason = info.get("reason")
+                first = info.get("first_name")
+                since = info.get("since")
+                reason = info.get("reason")
                 dur = format_duration(time.time() - since)
                 base = "💤👻 " if spooky else "💤 "
                 txt = f"{base}{first} está AFK desde {dur}."
                 if reason:
                     txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
                 await msg.reply_text(txt)
+
 
 # =========================
 # AUTORESPONDER
@@ -780,7 +824,8 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for uid_str, info in roster.items():
             name = str(info.get("name") or "").strip()
             if name.startswith("@") and name[1:].lower() == username:
-                uid = int(uid_str); break
+                uid = int(uid_str)
+                break
         if uid is None:
             await msg.reply_text(txt_autoresp_not_found(spooky))
             return
@@ -810,7 +855,8 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
         for uid_str, info in roster.items():
             name = str(info.get("name") or "").strip()
             if name.startswith("@") and name[1:].lower() == username:
-                uid = int(uid_str); break
+                uid = int(uid_str)
+                break
         if uid is None:
             return await msg.reply_text(txt_autoresp_not_found(spooky))
         member = await context.bot.get_chat_member(chat.id, uid)
@@ -825,6 +871,7 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
         await msg.reply_text(txt_autoresp_off(spooky, target_user.first_name))
     else:
         await msg.reply_text(txt_autoresp_none(spooky, target_user.first_name))
+
 
 # =========================
 # HORA
@@ -843,25 +890,32 @@ def _strip_accents(s: str) -> str:
 
 def flag_emoji(cc: str) -> str:
     cc = cc.upper()
-    if len(cc) != 2 or not cc.isalpha(): return "🏳️"
+    if len(cc) != 2 or not cc.isalpha():
+        return "🏳️"
     return "".join(chr(0x1F1E6 + ord(c) - ord('A')) for c in cc)
 
 def resolve_country_to_iso2_and_name(q: str | None) -> tuple[str, str] | None:
-    if not q: return ("ES", "España")
+    if not q:
+        return ("ES", "España")
     q = _strip_accents(q).lower()
-    for junk in (" de ", " del ", " la ", " el "): q = q.replace(junk, " ")
+    for junk in (" de ", " del ", " la ", " el "):
+        q = q.replace(junk, " ")
     q = " ".join(q.split())
     iso2 = _cc.convert(names=q, to="ISO2", not_found=None)
-    if not iso2 or iso2 == "not found": return None
+    if not iso2 or iso2 == "not found":
+        return None
     pretty = _cc.convert(names=iso2, src="ISO2", to="name_short")
-    if not pretty or pretty == "not found": pretty = iso2
+    if not pretty or pretty == "not found":
+        pretty = iso2
     return (iso2, pretty)
 
 def pick_timezone_for_country(iso2: str) -> str:
     iso2 = iso2.upper()
-    if iso2 in PRIMARY_TZ_BY_ISO2: return PRIMARY_TZ_BY_ISO2[iso2]
+    if iso2 in PRIMARY_TZ_BY_ISO2:
+        return PRIMARY_TZ_BY_ISO2[iso2]
     tzs = pytz.country_timezones.get(iso2)
-    if not tzs: return "Europe/Madrid"
+    if not tzs:
+        return "Europe/Madrid"
     return tzs[0]
 
 def format_time_in_tz(tz: str) -> str:
@@ -883,10 +937,12 @@ async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg or not msg.text: return
+    if not msg or not msg.text:
+        return
     spooky = is_spooky(msg.chat.id)
     m = re.match(r"(?is)^\s*hora\b(.*)$", msg.text.strip())
-    if not m: return
+    if not m:
+        return
     query = m.group(1).strip() or None
     resolved = resolve_country_to_iso2_and_name(query)
     if not resolved:
@@ -896,6 +952,7 @@ async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     flag = flag_emoji(iso2)
     hhmmss = format_time_in_tz(tz)
     await msg.reply_text(txt_hora_line(spooky, flag, country_name, hhmmss))
+
 
 # =========================
 # @ALL
@@ -915,10 +972,12 @@ async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_u
     spooky = is_spooky(chat.id)
     members = get_chat_roster(chat.id)
     if not members:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_users(spooky)); return
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_users(spooky))
+        return
     parts = build_mentions_html(members)
     if not parts:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets(spooky)); return
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets(spooky))
+        return
 
     header = txt_all_header(spooky, by_user.first_name, extra)
     try:
@@ -932,17 +991,17 @@ async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_u
             body = block + motivo_html
             await context.bot.send_message(chat_id=chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
             await asyncio.sleep(0.3)
-        except Exception as e:
-            logging.exception("Fallo bloque @all", exc_info=e)
+        except Exception:
+            logging.exception("Fallo bloque @all")
     _last_all[chat.id] = time.time()
 
 async def confirm_all(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
     spooky = is_spooky(chat_id)
     data_yes = f"allconfirm:{chat_id}:yes:{initiator_id}"
-    data_no  = f"allconfirm:{chat_id}:no:{initiator_id}"
+    data_no = f"allconfirm:{chat_id}:no:{initiator_id}"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(spooky),  callback_data=data_no)]
+         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
     ])
 
 async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -952,7 +1011,8 @@ async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE
     await safe_q_answer(q)
     try:
         _, cid, action, initiator = q.data.split(":")
-        cid = int(cid); initiator = int(initiator)
+        cid = int(cid)
+        initiator = int(initiator)
     except Exception:
         return await q.edit_message_text(txt_all_confirm_bad(spooky))
     if q.from_user.id != initiator:
@@ -979,11 +1039,13 @@ async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    chat = msg.chat; user = msg.from_user
+    chat = msg.chat
+    user = msg.from_user
     text = msg.text
     extra = text.split(" ", 1)[1] if " " in text else ""
     ok, why = await _check_all_permissions(context, chat.id, user.id)
-    if not ok: return await msg.reply_text(why)
+    if not ok:
+        return await msg.reply_text(why)
     cfg = get_chat_settings(chat.id)
     if cfg.get("all_confirm", True):
         kb = await confirm_all(chat.id, context, extra, user.id)
@@ -994,12 +1056,17 @@ async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg or not msg.text or (msg.from_user and msg.from_user.is_bot): return
+    if not msg or not msg.text or (msg.from_user and msg.from_user.is_bot):
+        return
     t = msg.text.strip()
-    if not t.lower().startswith("@all"): return
-    chat = msg.chat; user = msg.from_user; extra = t[4:].lstrip()
+    if not t.lower().startswith("@all"):
+        return
+    chat = msg.chat
+    user = msg.from_user
+    extra = t[4:].lstrip()
     ok, why = await _check_all_permissions(context, chat.id, user.id)
-    if not ok: return await msg.reply_text(why)
+    if not ok:
+        return await msg.reply_text(why)
     cfg = get_chat_settings(chat.id)
     if cfg.get("all_confirm", True):
         kb = await confirm_all(chat.id, context, extra, user.id)
@@ -1007,6 +1074,7 @@ async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["pending_all"] = extra
         return
     await execute_all(chat, context, extra, user)
+
 
 # =========================
 # @ADMIN
@@ -1028,8 +1096,10 @@ async def _get_admin_members(chat, context: ContextTypes.DEFAULT_TYPE) -> List[d
     out, seen = [], set()
     for cm in admins:
         u = cm.user
-        if not u or u.is_bot: continue
-        if u.id in seen: continue
+        if not u or u.is_bot:
+            continue
+        if u.id in seen:
+            continue
         seen.add(u.id)
         out.append({"id": u.id, "first_name": u.first_name or (u.username or "Admin")})
     return out
@@ -1042,7 +1112,8 @@ def _build_mentions_html_from_basic(members: List[dict]) -> List[str]:
         mention = f'<a href="tg://user?id={uid}">{html.escape(name)}</a>'
         batch.append(mention)
         if i % 20 == 0:
-            chunks.append(", ".join(batch)); batch = []
+            chunks.append(", ".join(batch))
+            batch = []
     if batch:
         chunks.append(", ".join(batch))
     return chunks
@@ -1056,25 +1127,25 @@ async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by
     header = txt_admin_header(spooky, by_user.first_name, extra)
     try:
         await context.bot.send_message(chat_id=chat.id, text=header)
-    except Exception as e:
-        logging.exception("Fallo cabecera @admin", exc_info=e)
+    except Exception:
+        logging.exception("Fallo cabecera @admin")
     motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
     for block in parts:
         try:
             body = block + motivo_html
             await context.bot.send_message(chat_id=chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
             await asyncio.sleep(0.3)
-        except Exception as e:
-            logging.exception("Fallo bloque @admin", exc_info=e)
+        except Exception:
+            logging.exception("Fallo bloque @admin")
     _admin_last[chat.id] = time.time()
 
 async def confirm_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
     spooky = is_spooky(chat_id)
     data_yes = f"adminconfirm:{chat_id}:yes:{initiator_id}"
-    data_no  = f"adminconfirm:{chat_id}:no:{initiator_id}"
+    data_no = f"adminconfirm:{chat_id}:no:{initiator_id}"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(spooky),  callback_data=data_no)]
+         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
     ])
 
 async def callback_adminconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1084,7 +1155,8 @@ async def callback_adminconfirm(update: Update, context: ContextTypes.DEFAULT_TY
     await safe_q_answer(q)
     try:
         _, cid, action, initiator = q.data.split(":")
-        cid = int(cid); initiator = int(initiator)
+        cid = int(cid)
+        initiator = int(initiator)
     except Exception:
         return await q.edit_message_text(txt_all_confirm_bad(spooky))
     if q.from_user.id != initiator:
@@ -1101,10 +1173,12 @@ async def callback_adminconfirm(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    chat = msg.chat; user = msg.from_user
+    chat = msg.chat
+    user = msg.from_user
     extra = msg.text.split(" ", 1)[1] if " " in msg.text else ""
     ok, why = await _check_admin_ping_permissions(context, chat.id)
-    if not ok: return await msg.reply_text(why)
+    if not ok:
+        return await msg.reply_text(why)
     cfg = get_chat_settings(chat.id)
     if cfg.get("admin_confirm", True):
         kb = await confirm_admin(chat.id, context, extra, user.id)
@@ -1115,12 +1189,17 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg or not msg.text or (msg.from_user and msg.from_user.is_bot): return
+    if not msg or not msg.text or (msg.from_user and msg.from_user.is_bot):
+        return
     t = msg.text.strip()
-    if not t.lower().startswith("@admin"): return
-    chat = msg.chat; user = msg.from_user; extra = t[6:].lstrip()
+    if not t.lower().startswith("@admin"):
+        return
+    chat = msg.chat
+    user = msg.from_user
+    extra = t[6:].lstrip()
     ok, why = await _check_admin_ping_permissions(context, chat.id)
-    if not ok: return await msg.reply_text(why)
+    if not ok:
+        return await msg.reply_text(why)
     cfg = get_chat_settings(chat.id)
     if cfg.get("admin_confirm", True):
         kb = await confirm_admin(chat.id, context, extra, user.id)
@@ -1128,6 +1207,7 @@ async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["pending_admin"] = extra
         return
     await execute_admin(chat, context, extra, user)
+
 
 # =========================
 # ESTADÍSTICAS TRES EN RAYA
@@ -1150,7 +1230,7 @@ def _ttt_stats_bump(chat_id: int, user_id: int, name: str, key: str):
 
 def _ttt_stats_record_winloss(chat_id: int, winner_id: int, winner_name: str, loser_id: int, loser_name: str):
     _ttt_stats_bump(chat_id, winner_id, winner_name, "wins")
-    _ttt_stats_bump(chat_id, loser_id,  loser_name,  "losses")
+    _ttt_stats_bump(chat_id, loser_id, loser_name, "losses")
 
 def _ttt_stats_record_draw(chat_id: int, uid_a: int, name_a: str, uid_b: int, name_b: str):
     _ttt_stats_bump(chat_id, uid_a, name_a, "draws")
@@ -1158,7 +1238,8 @@ def _ttt_stats_record_draw(chat_id: int, uid_a: int, name_a: str, uid_b: int, na
 
 def _ttt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
     metric = metric.lower()
-    if metric not in ("wins", "draws", "losses"): metric = "wins"
+    if metric not in ("wins", "draws", "losses"):
+        metric = "wins"
     stats = _ttt_stats_load().get(str(chat_id), {})
     if not stats:
         return "Aún no hay partidas registradas en este chat."
@@ -1172,6 +1253,7 @@ def _ttt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
     for i, (val, name, _uid) in enumerate(rows, start=1):
         out.append(f"{i}. {name} — {val}")
     return "\n".join(out)
+
 
 # =========================
 # TRES EN RAYA (handlers)
@@ -1192,11 +1274,11 @@ def _ttt_new_board() -> list[str]:
 
 def _ttt_winner(board: list[str]) -> str | None:
     wins = [
-        (0,1,2),(3,4,5),(6,7,8),
-        (0,3,6),(1,4,7),(2,5,8),
-        (0,4,8),(2,4,6)
+        (0, 1, 2), (3, 4, 5), (6, 7, 8),
+        (0, 3, 6), (1, 4, 7), (2, 5, 8),
+        (0, 4, 8), (2, 4, 6)
     ]
-    for a,b,c in wins:
+    for a, b, c in wins:
         if board[a] != TTT_EMPTY and board[a] == board[b] == board[c]:
             return board[a]
     return None
@@ -1209,7 +1291,7 @@ def _ttt_board_markup(chat_id: int, msg_id: int, board: list[str], playing: bool
     for r in range(3):
         btns = []
         for c in range(3):
-            idx = r*3 + c
+            idx = r * 3 + c
             label = board[idx]
             if label == TTT_EMPTY and playing:
                 cb = f"ttt:play:{chat_id}:{msg_id}:{idx}"
@@ -1244,11 +1326,8 @@ def _ttt_footer_markup(chat_id: int, msg_id: int, state: Dict[str, Any]) -> Inli
         buttons.append([InlineKeyboardButton("Nueva partida", callback_data=f"ttt:rematch:{chat_id}:{msg_id}")])
 
     board_kb = _ttt_board_markup(chat_id, msg_id, state["board"], state["status"] == "playing")
-
-    # tuple -> list abans d'afegir files noves
     all_rows = [list(row) for row in board_kb.inline_keyboard]
     all_rows.extend(buttons)
-
     return InlineKeyboardMarkup(all_rows)
 
 def _ttt_can_play(state: Dict[str, Any], user_id: int) -> bool:
@@ -1288,7 +1367,8 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for uid_str, info in roster.items():
             name = str(info.get("name") or "").strip()
             if name.startswith("@") and name[1:].lower() == username:
-                uid = int(uid_str); break
+                uid = int(uid_str)
+                break
         if uid:
             member = await context.bot.get_chat_member(chat.id, uid)
             opponent_id = member.user.id
@@ -1309,19 +1389,19 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = _ttt_header_text(spooky, state)
 
-    # Envia sense teclat per obtenir message_id real (evita msg_id=0)
+    # Envia sin teclado para obtener message_id real (evita msg_id=0)
     sent = await context.bot.send_message(chat_id=chat.id, text=text)
 
-    # Guarda estat amb el message_id correcte
+    # Guarda estado con el message_id correcto
     _ttt_set_game(chat.id, sent.message_id, state)
 
-    # Si hi havia oponent, arrenca directament
+    # Si había oponente, arranca directamente
     if opponent_id and opponent_id != pX.id:
         state["status"] = "playing"
         state["turn"] = random.choice(["X", "O"])
         _ttt_set_game(chat.id, sent.message_id, state)
 
-    # Ara sí, afegeix teclat amb msg_id real
+    # Ahora sí, añade teclado con msg_id real
     kb = _ttt_footer_markup(chat.id, sent.message_id, state)
     await sent.edit_text(_ttt_header_text(spooky, state), reply_markup=kb)
 
@@ -1342,7 +1422,7 @@ async def ttt_join_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_i
     state["players"]["O_id"] = user.id
     state["players"]["O_name"] = user.first_name
     state["status"] = "playing"
-    state["turn"] = random.choice(["X","O"])
+    state["turn"] = random.choice(["X", "O"])
     _ttt_set_game(chat_id, msg_id, state)
 
     await safe_q_answer(q, "¡Partida iniciada!")
@@ -1372,7 +1452,7 @@ async def ttt_rematch_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, cha
     new_state = {
         "board": _ttt_new_board(),
         "status": "playing",
-        "turn": random.choice(["X","O"]),
+        "turn": random.choice(["X", "O"]),
         "players": {
             "X_id": old["players"]["O_id"],
             "X_name": old["players"]["O_name"],
@@ -1406,8 +1486,10 @@ async def ttt_play_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_i
 
     winner = _ttt_winner(board)
     if winner:
-        px = state["players"]["X_name"]; po = state["players"]["O_name"]
-        x_id = state["players"]["X_id"]; o_id = state["players"]["O_id"]
+        px = state["players"]["X_name"]
+        po = state["players"]["O_name"]
+        x_id = state["players"]["X_id"]
+        o_id = state["players"]["O_id"]
         if winner == TTT_X:
             ganador, ganador_id = px, x_id
             perdedor, perdedor_id = po, o_id
@@ -1419,8 +1501,10 @@ async def ttt_play_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_i
         if ganador_id and perdedor_id:
             _ttt_stats_record_winloss(chat_id, ganador_id, ganador or "Jugador", perdedor_id, perdedor or "Jugador")
     elif _ttt_full(board):
-        px = state["players"]["X_name"]; po = state["players"]["O_name"]
-        x_id = state["players"]["X_id"]; o_id = state["players"]["O_id"]
+        px = state["players"]["X_name"]
+        po = state["players"]["O_name"]
+        x_id = state["players"]["X_id"]
+        o_id = state["players"]["O_id"]
         state["status"] = "ended"
         state["result"] = "Empate. Buen duelo."
         if x_id and o_id:
@@ -1448,7 +1532,8 @@ async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await safe_q_answer(q, "El módulo TTT está desactivado en este chat.", show_alert=True)
 
         if action == "play":
-            idx = int(parts[4]); return await ttt_play_cb(update, context, chat_id, msg_id, idx)
+            idx = int(parts[4])
+            return await ttt_play_cb(update, context, chat_id, msg_id, idx)
         elif action == "join":
             return await ttt_join_cb(update, context, chat_id, msg_id)
         elif action == "cancel":
@@ -1457,12 +1542,13 @@ async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await ttt_rematch_cb(update, context, chat_id, msg_id)
         else:
             return await safe_q_answer(q)
-    except Exception as e:
-        logging.exception("ttt router error", exc_info=e)
+    except Exception:
+        logging.exception("ttt router error")
         try:
             await safe_q_answer(q, "Error en la jugada.", show_alert=True)
-        except:
+        except Exception:
             pass
+
 
 # =========================
 # TOP TTT
@@ -1475,6 +1561,7 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     metric = (context.args[0].lower() if context.args else "wins")
     await context.bot.send_message(chat_id=msg.chat.id, text=_ttt_stats_top(msg.chat.id, metric))
 
+
 # =========================
 # ON MESSAGE
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1484,7 +1571,6 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = msg.chat
     user = msg.from_user
 
-    # SangMata: notify on name/@ changes when user speaks and module enabled
     try:
         cfg = _with_defaults(get_chat_settings(chat.id))
         if cfg.get("notify_name_change", False):
@@ -1545,6 +1631,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             disable_web_page_preview=True
         )
 
+
 # =========================
 # ERROR HANDLER
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1594,7 +1681,7 @@ def build_config_keyboard(chat_id: int) -> InlineKeyboardMarkup:
     codes = list(MODULES.keys())
     rows = []
     for i in range(0, len(codes), 2):
-        chunk = codes[i:i+2]
+        chunk = codes[i:i + 2]
         rows.append([b(c) for c in chunk])
 
     rows.append([
@@ -1681,7 +1768,6 @@ async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
-
 # =========================
 # /START — HUB en privado
 HUB_MODULES = {
@@ -1695,15 +1781,11 @@ HUB_MODULES = {
     "halloween": {"title": "Halloween", "desc": "Cambia el tema de los mensajes del bot.", "cmds": ["halloween on|off"]},
 }
 
-
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
 def build_hub_keyboard() -> InlineKeyboardMarkup:
     codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg", "halloween"]
     rows = []
     for i in range(0, len(codes), 2):
-        chunk = codes[i:i+2]
+        chunk = codes[i:i + 2]
         rows.append([InlineKeyboardButton(HUB_MODULES[c]["title"], callback_data=f"hub:m:{c}") for c in chunk])
     rows.append([InlineKeyboardButton("⚙️ Configuración", callback_data="hub:cfg"), InlineKeyboardButton("📜 Ver comandos", callback_data="hub:help")])
     rows.append([InlineKeyboardButton("❌ Cerrar", callback_data="hub:x")])
@@ -1732,17 +1814,13 @@ def build_hub_module_keyboard(code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("❌ Cerrar", callback_data="hub:x")],
     ])
 
-
-
-
 async def _hub_edit_message(q, text: str, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
     try:
-        if q.message and q.message.photo:
+        if q.message and getattr(q.message, "photo", None):
             return await q.message.edit_caption(caption=text, reply_markup=reply_markup, parse_mode=parse_mode)
         else:
             return await q.message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
     except Exception:
-        # fallback: try sending a new message to avoid silent failure
         try:
             return await q.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
         except Exception:
@@ -1788,6 +1866,7 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
+
 
 # =========================
 # MAIN
@@ -1857,5 +1936,6 @@ def main():
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
     app.run_polling()
+
 if __name__ == "__main__":
     main()
