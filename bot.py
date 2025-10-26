@@ -126,9 +126,13 @@ async def _bot_username(context: ContextTypes.DEFAULT_TYPE) -> str:
     me = await context.bot.get_me()
     return me.username
 
+# NUEVO: helper para comprobar si un módulo está activado en un chat
+def is_module_enabled(chat_id: int, key: str) -> bool:
+    cfg = _with_defaults(get_chat_settings(chat_id))
+    return bool(cfg.get(key, DEFAULTS.get(key, False)))
+
 # =========================
 # ROSTER
-# =========================
 def load_roster() -> dict:
     try:
         with open(ROSTER_FILE, "r", encoding="utf-8") as f:
@@ -677,6 +681,11 @@ async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = msg.chat
     user = msg.from_user
+
+    # Respect module toggle
+    if not is_module_enabled(chat.id, "afk_enabled"):
+        return await msg.reply_text("El módulo AFK está desactivado en este chat.")
+
     reason = " ".join(context.args) if context.args else None
     AFK_USERS[user.id] = {"since": time.time(), "reason": reason, "username": (user.username or "").lower(), "first_name": user.first_name}
     phrase = choose_afk_phrase(chat.id).format(first=user.first_name)
@@ -687,6 +696,11 @@ async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text: return
+
+    # Respect module toggle
+    if not is_module_enabled(msg.chat.id, "afk_enabled"):
+        return
+
     t = msg.text.strip()
     m = re.match(r"(?is)^\s*(brb|afk)\b[^\S\r\n]*(.*)$", t)
     if not m: return
@@ -698,6 +712,11 @@ async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg: return
+
+    # Respect module toggle
+    if not is_module_enabled(msg.chat.id, "afk_enabled"):
+        return
+
     spooky = is_spooky(msg.chat.id)
     # reply target
     if msg.reply_to_message and msg.reply_to_message.from_user:
@@ -731,7 +750,6 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
 
 # =========================
 # AUTORESPONDER
-# =========================
 async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     # SOLO ADMIN
@@ -812,7 +830,6 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
 
 # =========================
 # HORA
-# =========================
 _cc = coco.CountryConverter()
 PRIMARY_TZ_BY_ISO2 = {
     "US": "America/New_York",
@@ -884,7 +901,6 @@ async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # @ALL
-# =========================
 async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[bool, str]:
     spooky = is_spooky(chat_id)
     if not await is_admin(context, chat_id, user_id):
@@ -996,7 +1012,6 @@ async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # @ADMIN
-# =========================
 async def _check_admin_ping_permissions(context, chat_id: int) -> tuple[bool, str]:
     spooky = is_spooky(chat_id)
     cfg = get_chat_settings(chat_id)
@@ -1118,7 +1133,6 @@ async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_T
 
 # =========================
 # ESTADÍSTICAS TRES EN RAYA
-# =========================
 def _ttt_stats_load() -> dict:
     s = load_settings()
     return s.setdefault("_ttt_stats", {})
@@ -1163,7 +1177,6 @@ def _ttt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
 
 # =========================
 # TRES EN RAYA (handlers)
-# =========================
 def _ttt_get_game(chat_id: int, msg_id: int) -> Dict[str, Any] | None:
     return TTT_GAMES.get(chat_id, {}).get(msg_id)
 
@@ -1445,7 +1458,6 @@ async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # TOP TTT
-# =========================
 async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     /top_ttt [wins|draws|losses]
@@ -1457,7 +1469,6 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # ON MESSAGE
-# =========================
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.from_user or not msg.text:
@@ -1504,11 +1515,11 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("afk_skip_message_id", None)
         return
 
-    # avisos AFK a terceros
+    # avisos AFK a terceros (solo si módulo AFK activado)
     await notify_if_mentioning_afk(update, context)
 
-    # si quien habla estaba AFK -> retorno
-    if user.id in AFK_USERS:
+    # si quien habla estaba AFK -> retorno (solo si módulo AFK activado)
+    if is_module_enabled(chat.id, "afk_enabled") and user.id in AFK_USERS:
         info = AFK_USERS.pop(user.id)
         since = info.get("since")
         phrase = choose_return_phrase(chat.id).format(first=user.first_name)
@@ -1528,14 +1539,12 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # ERROR HANDLER
-# =========================
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.exception("Unhandled exception", exc_info=context.error)
 
 
 # =========================
 # /CONFIG — Panel compacto con toggles
-# =========================
 MODULES: Dict[str, Dict[str, str]] = {
     "afk": {"key": "afk_enabled", "label": "AFK"},
     "all": {"key": "all_enabled", "label": "@all"},
@@ -1667,7 +1676,6 @@ async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # /START — HUB en privado
-# =========================
 HUB_MODULES = {
     "afk": {"title": "AFK", "desc": "Activa el modo ausente con un mensaje automático y aviso al volver.", "cmds": ["afk [motivo]"]},
     "all": {"title": "@all", "desc": "Menciona a todos los miembros del grupo con control anti-spam.", "cmds": ["@all [motivo]"]},
@@ -1775,7 +1783,6 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # MAIN
-# =========================
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     ensure_import_once()
