@@ -1,3 +1,4 @@
+# (Contenido completo del fichero actualizado)
 import os, json, time, random, asyncio, logging, re, html, unicodedata
 from datetime import datetime
 from typing import List, Dict, Any
@@ -333,7 +334,6 @@ def ensure_import_once():
 
 # =========================
 # TEXTOS (NORMAL vs HALLOWEEN)
-# =========================
 AFK_PHRASES_NORMAL = [
     "💤 {first} se ha puesto en modo AFK.",
     "📴 {first} está AFK. Deja tu recado.",
@@ -525,7 +525,7 @@ def txt_autoresp_usage(spooky: bool) -> str:
 def txt_autoresp_reply_usage(spooky: bool) -> str:
     return ("📜 Uso: responde a un mensaje con /autoresponder <texto del conjuro>"
             if spooky else
-            "Uso: responde a un mensaje con /autoresponder <texto>")
+            "Uso: /autoresponder <texto>")
 
 def txt_autoresp_not_found(spooky: bool) -> str:
     return ("🕸️ No he encontrado a esa alma en este círculo."
@@ -564,7 +564,6 @@ def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
 
 # =========================
 # START / HELP / HALLOWEEN
-# =========================
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -601,11 +600,11 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await help_cmd(update, context)
 
     if msg.chat.type == ChatType.PRIVATE:
-        text = txt_start_private(spooky)
+        text = txt_start_private(is_spooky(msg.chat.id))
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📖 Ver comandos", callback_data="show_help")]])
         await msg.reply_text(text, reply_markup=kb)
     else:
-        await msg.reply_text(txt_start_group(spooky))
+        await msg.reply_text(txt_start_group(is_spooky(msg.chat.id)))
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -676,7 +675,6 @@ async def halloween_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # AFK
-# =========================
 async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = msg.chat
@@ -1267,13 +1265,13 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     - Si pasas @usuario en args, reto directo.
     - Si no, partida abierta (botón Unirme).
     """
-
-    # Respect module toggle
-if not is_module_enabled(chat.id, "ttt_enabled"):
-    return await msg.reply_text("El módulo TTT está desactivado en este chat.")
-    
     msg = update.message
     chat = msg.chat
+
+    # Respect module toggle
+    if not is_module_enabled(chat.id, "ttt_enabled"):
+        return await msg.reply_text("El módulo TTT está desactivado en este chat.")
+
     spooky = is_spooky(chat.id)
 
     pX = msg.from_user
@@ -1444,10 +1442,11 @@ async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         action = parts[1]
         chat_id = int(parts[2])
         msg_id = int(parts[3])
+
         # Denegar callbacks si el módulo está desactivado
         if not is_module_enabled(chat_id, "ttt_enabled"):
             return await safe_q_answer(q, "El módulo TTT está desactivado en este chat.", show_alert=True)
-        
+
         if action == "play":
             idx = int(parts[4]); return await ttt_play_cb(update, context, chat_id, msg_id, idx)
         elif action == "join":
