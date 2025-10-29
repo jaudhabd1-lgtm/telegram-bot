@@ -970,6 +970,7 @@ async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[b
 
 async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
     spooky = is_spooky(chat.id)
+    await prune_roster(chat.id, context)
     members = get_chat_roster(chat.id)
     if not members:
         await context.bot.send_message(chat_id=chat.id, text=txt_no_users(spooky))
@@ -1120,6 +1121,7 @@ def _build_mentions_html_from_basic(members: List[dict]) -> List[str]:
 
 async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
     spooky = is_spooky(chat.id)
+    await prune_roster(chat.id, context)  # <-- Pega aquí esta línea
     admins = await _get_admin_members(chat, context)
     if not admins:
         return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins(spooky))
