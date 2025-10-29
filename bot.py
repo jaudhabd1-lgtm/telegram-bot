@@ -190,6 +190,30 @@ def save_roster(roster: dict) -> None:
     except Exception as e:
         logging.exception("No se pudo guardar roster", exc_info=e)
 
+async def prune_roster(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Elimina del roster los usuarios que ya no están en el grupo.
+    Si hay error al consultar el estado de un usuario, lo mantiene en el roster.
+    """
+    roster = load_roster()
+    chat_roster = roster.get(str(chat_id), {})
+    cleaned = {}
+    for uid_str, info in chat_roster.items():
+        try:
+            member = await context.bot.get_chat_member(chat_id, int(uid_str))
+            logging.info(f"Usuario {uid_str}: status={member.status}")
+            if member.status not in ("left", "kicked"):
+                cleaned[uid_str] = info
+            else:
+                logging.info(f"Eliminando usuario {uid_str} por status: {member.status}")
+        except Exception as e:
+            logging.warning(f"Error consultando {uid_str}: {e}")
+            # Si hay error, mantenlo en el roster por seguridad.
+            cleaned[uid_str] = info
+    roster[str(chat_id)] = cleaned
+    save_roster(roster)
+
+
 # --- Name change detection (SangMata-like) ---
 def _detect_name_changes(chat_id: int, user) -> dict:
     roster = load_roster()
