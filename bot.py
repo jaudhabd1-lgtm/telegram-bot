@@ -249,6 +249,7 @@ def upsert_roster_member(chat_id: int, user) -> None:
     rec["first"] = first
     rec["username"] = username  # may be None
     rec["name"] = display
+    rec["is_bot"] = getattr(user, "is_bot", False)  # <-- Cambiado: almacena valor real de Telegram
     rec["last_ts"] = time.time()
     rec["messages"] = int(rec.get("messages", 0)) + 1 if "messages" in rec else 1
     chat_data[uid] = rec
@@ -267,15 +268,8 @@ def get_chat_roster(chat_id: int) -> List[dict]:
         except Exception:
             continue
         raw_name = str(info.get("name") or "").strip() or "usuario"
-        nm = raw_name.lower()
-        is_bot = any([
-            nm.endswith("_bot"),
-            " bot" in nm,
-            nm.startswith("@missrose_bot"),
-            nm.startswith("@chatfightbot"),
-            nm.startswith("@linemusicbot")
-        ])
         username = raw_name[1:].lower() if raw_name.startswith("@") else ""
+        is_bot = bool(info.get("is_bot", False))  # <-- Cambiado: lee valor fijo, no heurístico
         norm.append({
             "id": uid,
             "first_name": raw_name,
