@@ -1939,6 +1939,9 @@ def main():
     # TOP TTT
     app.add_handler(CommandHandler("top_ttt", top_ttt_cmd))
 
+    # TIKTOK DOWNLOADER
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tiktok_detector), group=1)
+
     # CATCH-ALL
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message), group=50)
 
