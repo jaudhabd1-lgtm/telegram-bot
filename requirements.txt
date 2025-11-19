@@ -2,3 +2,4 @@ python-telegram-bot==21.6
 country_converter==1.2
 pytz==2024.1
 tzdata==2025.1
+requests
