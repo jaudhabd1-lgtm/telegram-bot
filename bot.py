@@ -1695,18 +1695,24 @@ import requests
 MODULES["tiktok"] = {"key": "tiktok_enabled", "label": "TikTok"}
 DEFAULTS["tiktok_enabled"] = True
 
+
 def tiktok_downloader(url: str) -> bytes | None:
-    api = f"https://ttsave.app/api/download?url={url}"
     try:
+        # Resolve redirects (vm.tiktok.com -> long URL)
+        real_url = requests.get(url, timeout=15, allow_redirects=True).url
+
+        api = f"https://ttsave.app/api/download?url={real_url}"
         r = requests.get(api, timeout=20)
         data = r.json()
         video = data.get("video", {}).get("no_wm")
         if not video:
             return None
+
         vid = requests.get(video, timeout=20)
         return vid.content
     except Exception:
         return None
+
 
 async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
