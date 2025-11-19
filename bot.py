@@ -1894,20 +1894,25 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # TIKTOK DOWNLOADER (AUTO)
-import aiohttp
+import requests
 
 MODULES["tiktok"] = {"key": "tiktok_enabled", "label": "TikTok"}
 DEFAULTS["tiktok_enabled"] = True
 
-async def tiktok_downloader(url: str) -> bytes | None:
+
+def tiktok_downloader(url: str) -> bytes | None:
     api = f"https://ttsave.app/api/download?url={url}"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api, timeout=20) as r:
-                data = await r.json()
-                video = data.get("video", {}).get("no_wm")
-                if not video:
-                    return None
+        r = requests.get(api, timeout=20)
+        data = r.json()
+        video = data.get("video", {}).get("no_wm")
+        if not video:
+            return None
+        vid = requests.get(video, timeout=20)
+        return vid.content
+    except Exception:
+        return None
+
                 async with session.get(video, timeout=20) as vid:
                     return await vid.read()
     except Exception:
@@ -1923,7 +1928,7 @@ async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not m:
         return
     link = m.group(1)
-    vid = await tiktok_downloader(link)
+    vid = tiktok_downloader(link)
     if not vid:
         await msg.reply_text("No pude descargar el vídeo de TikTok.")
         return
