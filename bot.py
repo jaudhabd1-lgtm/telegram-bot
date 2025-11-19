@@ -1276,23 +1276,13 @@ def _ttt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
 
 
 
-def tiktok_downloader(url: str) -> bytes | None:
-    api = f"https://ttsave.app/api/download?url={url}"
-    try:
-        r = requests.get(api, timeout=20)
-        data = r.json()
-        video = data.get("video", {}).get("no_wm")
-        if not video:
-            return None
+
         vid = requests.get(video, timeout=20)
         return vid.content
     except Exception:
         return None
 
-async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text:
-        return
+
     if not is_module_enabled(msg.chat.id, "tiktok_enabled"):
         return
     m = re.search(r"(https?://[^\s]*tiktok[^\s]*)", msg.text)
