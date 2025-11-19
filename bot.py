@@ -1276,6 +1276,46 @@ def _ttt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
 
 
 # =========================
+# TIKTOK DOWNLOADER (AUTO) - using requests
+import requests
+
+MODULES["tiktok"] = {"key": "tiktok_enabled", "label": "TikTok"}
+DEFAULTS["tiktok_enabled"] = True
+
+def tiktok_downloader(url: str) -> bytes | None:
+    api = f"https://ttsave.app/api/download?url={url}"
+    try:
+        r = requests.get(api, timeout=20)
+        data = r.json()
+        video = data.get("video", {}).get("no_wm")
+        if not video:
+            return None
+        vid = requests.get(video, timeout=20)
+        return vid.content
+    except Exception:
+        return None
+
+async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or not msg.text:
+        return
+    if not is_module_enabled(msg.chat.id, "tiktok_enabled"):
+        return
+    m = re.search(r"(https?://[^\s]*tiktok[^\s]*)", msg.text)
+    if not m:
+        return
+    link = m.group(1)
+    vid = tiktok_downloader(link)
+    if not vid:
+        await msg.reply_text("No pude descargar el vídeo de TikTok.")
+        return
+    await context.bot.send_video(chat_id=msg.chat.id, video=vid, caption="Aquí lo tienes 📹")
+
+# register detector in main manually
+
+
+
+# =========================
 # TRES EN RAYA (handlers)
 def _ttt_get_game(chat_id: int, msg_id: int) -> Dict[str, Any] | None:
     return TTT_GAMES.get(chat_id, {}).get(msg_id)
@@ -1968,40 +2008,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# =========================
-# TIKTOK DOWNLOADER (AUTO) - using requests
-import requests
-
-MODULES["tiktok"] = {"key": "tiktok_enabled", "label": "TikTok"}
-DEFAULTS["tiktok_enabled"] = True
-
-def tiktok_downloader(url: str) -> bytes | None:
-    api = f"https://ttsave.app/api/download?url={url}"
-    try:
-        r = requests.get(api, timeout=20)
-        data = r.json()
-        video = data.get("video", {}).get("no_wm")
-        if not video:
-            return None
-        vid = requests.get(video, timeout=20)
-        return vid.content
-    except Exception:
-        return None
-
-async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text:
-        return
-    if not is_module_enabled(msg.chat.id, "tiktok_enabled"):
-        return
-    m = re.search(r"(https?://[^\s]*tiktok[^\s]*)", msg.text)
-    if not m:
-        return
-    link = m.group(1)
-    vid = tiktok_downloader(link)
-    if not vid:
-        await msg.reply_text("No pude descargar el vídeo de TikTok.")
-        return
-    await context.bot.send_video(chat_id=msg.chat.id, video=vid, caption="Aquí lo tienes 📹")
-
-# register detector in main manually
