@@ -1701,10 +1701,10 @@ def tiktok_downloader(url: str) -> bytes | None:
         # Resolve redirects (vm.tiktok.com -> long URL)
         real_url = requests.get(url, timeout=15, allow_redirects=True).url
 
-        api = f"https://ttsave.app/api/download?url={real_url}"
+        api = f"https://tikwm.com/api/?url={real_url}"
         r = requests.get(api, timeout=20)
         data = r.json()
-        video = data.get("video", {}).get("no_wm")
+        video = data.get("data", {}).get("play")
         if not video:
             return None
 
@@ -2015,3 +2015,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
