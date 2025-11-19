@@ -1890,6 +1890,48 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # =========================
 # MAIN
+
+
+# =========================
+# TIKTOK DOWNLOADER (AUTO)
+import aiohttp
+
+MODULES["tiktok"] = {"key": "tiktok_enabled", "label": "TikTok"}
+DEFAULTS["tiktok_enabled"] = True
+
+async def tiktok_downloader(url: str) -> bytes | None:
+    api = f"https://ttsave.app/api/download?url={url}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api, timeout=20) as r:
+                data = await r.json()
+                video = data.get("video", {}).get("no_wm")
+                if not video:
+                    return None
+                async with session.get(video, timeout=20) as vid:
+                    return await vid.read()
+    except Exception:
+        return None
+
+async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or not msg.text:
+        return
+    if not is_module_enabled(msg.chat.id, "tiktok_enabled"):
+        return
+    m = re.search(r"(https?://[^\s]+tiktok[^\s]+)", msg.text)
+    if not m:
+        return
+    link = m.group(1)
+    vid = await tiktok_downloader(link)
+    if not vid:
+        await msg.reply_text("No pude descargar el vídeo de TikTok.")
+        return
+    await context.bot.send_video(chat_id=msg.chat.id, video=vid, caption="Aquí lo tienes 📹")
+
+# Register handler
+# Added inside main via dynamic injection
+
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     ensure_import_once()
