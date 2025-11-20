@@ -1724,11 +1724,15 @@ async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not m:
         return
     link = m.group(1)
+    try:
+        await msg.set_reaction("🔄")
+    except Exception:
+        pass
     vid = tiktok_downloader(link)
     if not vid:
         await msg.reply_text("No pude descargar el vídeo de TikTok.")
         return
-    await context.bot.send_video(chat_id=msg.chat.id, video=vid, caption="Aquí lo tienes 📹")
+    await context.bot.send_video(chat_id=msg.chat.id, video=vid)
 
 def _with_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(DEFAULTS)
