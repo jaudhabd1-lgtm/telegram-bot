@@ -8,7 +8,7 @@ import logging
 import re
 import html
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Any
 from zoneinfo import ZoneInfo
 
@@ -20,7 +20,7 @@ from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters, PollAnswerHandler, PollHandler
+    CallbackQueryHandler, ContextTypes, filters
 )
 
 # =========================
@@ -33,12 +33,6 @@ SETTINGS_FILE = os.path.join(PERSIST_DIR, "settings.json")
 LIST_URL = os.environ.get("LIST_URL", "")
 LIST_IMPORT_ONCE = os.environ.get("LIST_IMPORT_ONCE", "true").lower() in {"1", "true", "yes", "y"}
 LIST_IMPORT_MODE = os.environ.get("LIST_IMPORT_MODE", "merge").lower()  # merge|seed
-
-POOL_FILE = os.path.join(PERSIST_DIR, "pool.json")
-POOL_BACKUP_DIR = os.path.join(PERSIST_DIR, "backups")
-TRIVIA_STATE_FILE = os.path.join(PERSIST_DIR, "trivia_state.json")
-TRIVIA_STATS_FILE = os.path.join(PERSIST_DIR, "trivia_stats.json")
-TRIVIA_ADMIN_LOG_FILE = os.path.join(PERSIST_DIR, "trivia_admin_log.json")
 
 # =========================
 # ESTADO EN MEMORIA
@@ -59,7 +53,6 @@ logging.basicConfig(level=logging.INFO)
 
 # =========================
 # CACHES PARA FICHEROS
-# =========================
 SETTINGS_CACHE: Dict[str, Any] | None = None
 ROSTER_CACHE: Dict[str, Any] | None = None
 
@@ -68,6 +61,7 @@ ROSTER_CACHE: Dict[str, Any] | None = None
 def load_settings() -> Dict[str, Any]:
     global SETTINGS_CACHE
     if SETTINGS_CACHE is not None:
+        # return shallow copy to avoid accidental external mutation
         return dict(SETTINGS_CACHE)
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -103,6 +97,10 @@ def set_chat_setting(cid: int, key: str, value: Any) -> None:
         s[ckey] = {}
     s[ckey][key] = value
     save_settings(s)
+
+def is_spooky(cid: int) -> bool:
+    cfg = get_chat_settings(cid)
+    return bool(cfg.get("halloween", False))
 
 
 # =========================
@@ -162,6 +160,7 @@ def is_module_enabled(chat_id: int, key: str) -> bool:
     cfg = _with_defaults(get_chat_settings(chat_id))
     return bool(cfg.get(key, DEFAULTS.get(key, False)))
 
+
 # =========================
 # ROSTER (con cache)
 def load_roster() -> dict:
@@ -192,6 +191,10 @@ def save_roster(roster: dict) -> None:
         logging.exception("No se pudo guardar roster", exc_info=e)
 
 async def prune_roster(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Elimina del roster los usuarios que ya no están en el grupo.
+    Si hay error al consultar el estado de un usuario, lo mantiene en el roster.
+    """
     roster = load_roster()
     chat_roster = roster.get(str(chat_id), {})
     cleaned = {}
@@ -205,6 +208,7 @@ async def prune_roster(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
                 logging.info(f"Eliminando usuario {uid_str} por status: {member.status}")
         except Exception as e:
             logging.warning(f"Error consultando {uid_str}: {e}")
+            # Si hay error, mantenlo en el roster por seguridad.
             cleaned[uid_str] = info
     roster[str(chat_id)] = cleaned
     save_roster(roster)
@@ -245,7 +249,7 @@ def upsert_roster_member(chat_id: int, user) -> None:
     rec["first"] = first
     rec["username"] = username  # may be None
     rec["name"] = display
-    rec["is_bot"] = getattr(user, "is_bot", False)
+    rec["is_bot"] = getattr(user, "is_bot", False)  # <-- Cambiado: almacena valor real de Telegram
     rec["last_ts"] = time.time()
     rec["messages"] = int(rec.get("messages", 0)) + 1 if "messages" in rec else 1
     chat_data[uid] = rec
@@ -265,7 +269,7 @@ def get_chat_roster(chat_id: int) -> List[dict]:
             continue
         raw_name = str(info.get("name") or "").strip() or "usuario"
         username = raw_name[1:].lower() if raw_name.startswith("@") else ""
-        is_bot = bool(info.get("is_bot", False))
+        is_bot = bool(info.get("is_bot", False))  # <-- Cambiado: lee valor fijo, no heurístico
         norm.append({
             "id": uid,
             "first_name": raw_name,
@@ -301,6 +305,7 @@ def build_mentions_html(members: List[dict]) -> List[str]:
     return chunks
 
 ROSTER_LINE_RE = re.compile(r"^\s*\[?(\d+)\]?\s+(.+?)\s+\[?(-?\d+)\]?\s*$")
+
 
 def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
     if not url:
@@ -386,7 +391,7 @@ def ensure_import_once():
 
 
 # =========================
-# TEXTOS
+# TEXTOS (NORMAL vs HALLOWEEN)
 AFK_PHRASES_NORMAL = [
     "💤 {first} se ha puesto en modo AFK.",
     "📴 {first} está AFK. Deja tu recado.",
@@ -413,115 +418,213 @@ AFK_RETURN_NORMAL = [
     "🐾 {first} ha encontrado el camino de regreso.",
     "🎊 {first} ha regresado triunfalmente."
 ]
-def choose_afk_phrase() -> str:
-    return random.choice(AFK_PHRASES_NORMAL)
+AFK_PHRASES_SPOOKY = [
+    "🎃 {first} se ha desvanecido entre la niebla… (AFK)",
+    "🕯️ {first} ha cruzado al reino de las sombras (AFK). Deja tu ofrenda.",
+    "🦇 {first} abandona el plano mortal un momento (AFK).",
+    "🕸️ {first} ha quedado atrapado en una telaraña maldita.",
+    "🧙‍♂️ {first} ha sido invocado a otra dimensión.",
+    "☠️ {first} está realizando un ritual prohibido.",
+    "⚰️ {first} descansa en su ataúd temporalmente.",
+    "👁️‍🗨️ {first} fue reclamado por las tinieblas.",
+    "🌑 {first} camina bajo la luna llena (modo AFK).",
+    "🪦 {first} yace entre susurros del más allá."
+]
+AFK_RETURN_SPOOKY = [
+    "🧛‍♂️ {first} ha salido del ataúd. ¡Ha vuelto!",
+    "👻 {first} regresa desde el más allá.",
+    "🕸️ {first} ha roto el hechizo y está de vuelta.",
+    "⚡ {first} ha resucitado con un trueno.",
+    "🪞 {first} cruzó el espejo y volvió al chat.",
+    "🕯️ {first} ha regresado con una nueva maldición.",
+    "🪶 {first} vuelve dejando un rastro de plumas oscuras.",
+    "💀 {first} ha escapado del inframundo.",
+    "🌘 {first} regresó cuando la luna lo permitió.",
+    "🔮 {first} reaparece entre humo y susurros."
+]
 
-def choose_return_phrase() -> str:
-    return random.choice(AFK_RETURN_NORMAL)
+def choose_afk_phrase(chat_id: int) -> str:
+    return random.choice(AFK_PHRASES_SPOOKY if is_spooky(chat_id) else AFK_PHRASES_NORMAL)
 
-def txt_help_triggers() -> str:
+def choose_return_phrase(chat_id: int) -> str:
+    return random.choice(AFK_RETURN_SPOOKY if is_spooky(chat_id) else AFK_RETURN_NORMAL)
+
+def txt_start_private(spooky: bool) -> str:
+    if spooky:
+        return ("🎃 ¡Bienvenido a la mansión de RuruBot! 🐸\n"
+                "Gestiono grupos con AFK espectral, autoresponders embrujados y rituales @all/@admin.\n\n"
+                "Pulsa para ver los conjuros disponibles:")
+    return ("¡Hola! Soy RuruBot 🐸\n"
+            "Gestiono grupos con AFK, autoresponder, @all/@admin y más.\n\n"
+            "Pulsa el botón para ver los comandos disponibles.")
+
+def txt_start_group(spooky: bool) -> str:
+    return ("🐸👻 RuruBot ronda por este grupo. Usa /help para conocer sus artes oscuras."
+            if spooky else
+            "🐸 RuruBot activo en este grupo. Usa /help para ver qué puedo hacer.")
+
+def txt_help_triggers(spooky: bool) -> str:
+    if spooky:
+        return ("\n\nAtajos sin barra (informativo):\n"
+                "brb / afk — activa afk (desapareces entre la niebla)\n"
+                "hora [país] — hora del país (por defecto España)\n"
+                "🛡️ @all [motivo] — invocar a todas las almas\n"
+                "@admin [motivo] — llamar al aquelarre de administradores")
     return ("\n\nAtajos sin barra (informativo):\n            "
             "brb / afk — activa afk\n"
             "hora [país] — hora del país (por defecto España)\n"
             "🛡️ @all [motivo] — mencionar a todos\n"
             "@admin [motivo] — avisar solo a administradores")
 
-def txt_all_perm() -> str:
-    return "Solo los administradores pueden usar @all."
+def txt_all_perm(spooky: bool) -> str:
+    return ("⛔ Solo los guardianes (administradores) pueden invocar @all."
+            if spooky else
+            "Solo los administradores pueden usar @all.")
 
-def txt_all_disabled() -> str:
-    return "La función @all está desactivada en este grupo."
+def txt_all_disabled(spooky: bool) -> str:
+    return ("🕸️ El ritual @all está sellado en este aquelarre."
+            if spooky else
+            "La función @all está desactivada en este grupo.")
 
-def txt_all_cooldown() -> str:
-    return "Debes esperar antes de volver a usar @all."
+def txt_all_cooldown(spooky: bool) -> str:
+    return ("⏳ El círculo aún está caliente. Espera antes de invocar @all de nuevo."
+            if spooky else
+            "Debes esperar antes de volver a usar @all.")
 
-def txt_all_header(by_first: str, extra: str) -> str:
-    out = f"@all por {by_first}"
+def txt_all_header(spooky: bool, by_first: str, extra: str) -> str:
+    base = ("👻 @all invocado por " if spooky else "@all por ")
+    out = f"{base}{by_first}"
     if extra:
         out += f": {extra}"
     return out
 
-def txt_motivo_label() -> str:
-    return "<b>Motivo:</b> "
+def txt_motivo_label(spooky: bool) -> str:
+    return ("🎃 <b>Motivo embrujado:</b> " if spooky else "<b>Motivo:</b> ")
 
-def txt_no_users() -> str:
-    return "No tengo lista de usuarios para mencionar aquí."
+def txt_no_users(spooky: bool) -> str:
+    return ("🕳️ No detecto almas que invocar aquí."
+            if spooky else
+            "No tengo lista de usuarios para mencionar aquí.")
 
-def txt_no_targets() -> str:
-    return "No hay a quién mencionar."
+def txt_no_targets(spooky: bool) -> str:
+    return ("🕳️ No hay a quién invocar."
+            if spooky else
+            "No hay a quién mencionar.")
 
-def txt_all_confirm() -> str:
-    return "¿Quieres mencionar a todos los usuarios?"
+def txt_all_confirm(spooky: bool) -> str:
+    return ("🔮 ¿Invocar a todas las almas del chat?"
+            if spooky else
+            "¿Quieres mencionar a todos los usuarios?")
 
-def btn_confirm() -> str:
-    return "Confirmar"
+def btn_confirm(spooky: bool) -> str:
+    return "☠️ Confirmar" if spooky else "Confirmar"
 
-def btn_cancel() -> str:
-    return "Cancelar"
+def btn_cancel(spooky: bool) -> str:
+    return "🕸️ Cancelar" if spooky else "Cancelar"
 
-def txt_all_confirm_bad() -> str:
-    return "Confirmación inválida."
+def txt_all_confirm_bad(spooky: bool) -> str:
+    return ("⚠️ El ritual de confirmación ha fallado."
+            if spooky else
+            "Confirmación inválida.")
 
-def txt_only_initiator() -> str:
-    return "Solo puede confirmar quien inició la acción."
+def txt_only_initiator(spooky: bool) -> str:
+    return ("🪄 Solo quien invocó el ritual puede confirmarlo."
+            if spooky else
+            "Solo puede confirmar quien inició la acción.")
 
-def txt_sending_mentions() -> str:
-    return "Enviando menciones…"
+def txt_sending_mentions(spooky: bool) -> str:
+    return ("🔔 Abriendo el portal de menciones…"
+            if spooky else
+            "Enviando menciones…")
 
-def txt_canceled() -> str:
-    return "Cancelado."
+def txt_canceled(spooky: bool) -> str:
+    return ("❌ Ritual cancelado." if spooky else "Cancelado.")
 
-def txt_cancel_cmd() -> str:
-    return "Cancelado."
+def txt_cancel_cmd(spooky: bool) -> str:
+    return ("❌ Los espíritus han sido dispersados. (Acción cancelada)"
+            if spooky else
+            "Cancelado.")
 
-def txt_admin_disabled() -> str:
-    return "La función @admin está desactivada en este grupo."
+def txt_admin_disabled(spooky: bool) -> str:
+    return ("🧷 El conjuro @admin está sellado en este círculo."
+            if spooky else
+            "La función @admin está desactivada en este grupo.")
 
-def txt_admin_cooldown() -> str:
-    return "Debes esperar antes de volver a usar @admin."
+def txt_admin_cooldown(spooky: bool) -> str:
+    return ("⏳ El aquelarre necesita recuperar poder. Espera un poco."
+            if spooky else
+            "Debes esperar antes de volver a usar @admin.")
 
-def txt_admin_header(by_first: str, extra: str) -> str:
-    out = f"@admin por {by_first}"
+def txt_admin_header(spooky: bool, by_first: str, extra: str) -> str:
+    base = ("🦇 @admin invocado por " if spooky else "@admin por ")
+    out = f"{base}{by_first}"
     if extra:
         out += f": {extra}"
     return out
 
-def txt_no_admins() -> str:
-    return "No encuentro administradores para mencionar aquí."
+def txt_no_admins(spooky: bool) -> str:
+    return ("🕯️ No encuentro hechiceros (administradores) en este círculo."
+            if spooky else
+            "No encuentro administradores para mencionar aquí.")
 
-def txt_admin_confirm() -> str:
-    return "¿Quieres avisar a los administradores?"
+def txt_admin_confirm(spooky: bool) -> str:
+    return ("🪄 ¿Avisar al aquelarre de administradores?"
+            if spooky else
+            "¿Quieres avisar a los administradores?")
 
-def txt_autoresp_usage() -> str:
-    return "Uso: /autoresponder @usuario <texto> — o responde a un mensaje con /autoresponder <texto>"
+def txt_calling_admins(spooky: bool) -> str:
+    return ("🔔 Llamando al aquelarre…"
+            if spooky else
+            "Avisando a administradores…")
 
-def txt_autoresp_reply_usage() -> str:
-    return "Uso: /autoresponder <texto>"
+def txt_autoresp_usage(spooky: bool) -> str:
+    return ("📜 Uso: /autoresponder @usuario <texto del conjuro> — o responde a un mensaje con /autoresponder <texto>"
+            if spooky else
+            "Uso: /autoresponder @usuario <texto> — o responde a un mensaje con /autoresponder <texto>")
 
-def txt_autoresp_not_found() -> str:
-    return "No se ha podido identificar al usuario."
+def txt_autoresp_reply_usage(spooky: bool) -> str:
+    return ("📜 Uso: responde a un mensaje con /autoresponder <texto del conjuro>"
+            if spooky else
+            "Uso: /autoresponder <texto>")
 
-def txt_autoresp_on(first: str, text: str) -> str:
-    return f"✅ Autoresponder activado para {first}. Responderé con: \"{text}\"."
+def txt_autoresp_not_found(spooky: bool) -> str:
+    return ("🕸️ No he encontrado a esa alma en este círculo."
+            if spooky else
+            "No se ha podido identificar al usuario.")
 
-def txt_autoresp_off_usage() -> str:
-    return "Uso: /autoresponder_off @usuario — o responde a su mensaje."
+def txt_autoresp_on(spooky: bool, first: str, text: str) -> str:
+    return (f"✅ He grabado un hechizo de respuesta automática para {first}. Responderé con: “{text}”."
+            if spooky else
+            f"✅ Autoresponder activado para {first}. Responderé con: “{text}”.")
 
-def txt_autoresp_off(first: str) -> str:
-    return f"❌ Autoresponder desactivado para {first}."
+def txt_autoresp_off_usage(spooky: bool) -> str:
+    return ("📜 Uso: /autoresponder_off @usuario — o responde a su mensaje."
+            if spooky else
+            "Uso: /autoresponder_off @usuario — o responde a su mensaje.")
 
-def txt_autoresp_none(first: str) -> str:
-    return f"{first} no tenía autoresponder activo."
+def txt_autoresp_off(spooky: bool, first: str) -> str:
+    return ("❌ He disipado el hechizo de {first}.".format(first=first)
+            if spooky else
+            f"❌ Autoresponder desactivado para {first}.")
 
-def txt_hora_unknown() -> str:
-    return "No reconozco ese país. Ejemplos: /hora, /hora México, /hora Reino Unido"
+def txt_autoresp_none(spooky: bool, first: str) -> str:
+    return ("🔮 {first} no tenía ningún conjuro activo.".format(first=first)
+            if spooky else
+            f"{first} no tenía autoresponder activo.")
 
-def txt_hora_line(flag: str, country: str, hhmmss: str) -> str:
+def txt_hora_unknown(spooky: bool) -> str:
+    return ("🕰️ No reconozco ese reino. Ejemplos: /hora, /hora México, /hora Reino Unido"
+            if spooky else
+            "No reconozco ese país. Ejemplos: /hora, /hora México, /hora Reino Unido")
+
+def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
+    if spooky:
+        return f"🕰️ En {flag} {country} son las {hhmmss}. (resuenan campanas a lo lejos)"
     return f"En {flag} {country} son las {hhmmss}."
 
 
 # =========================
-# START / HELP
+# START / HELP / HALLOWEEN
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -560,14 +663,18 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos: busca mi perfil y pulsa Iniciar.")
     return
 
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = msg.chat
+    spooky = is_spooky(chat.id)
 
     # En grupos: redirigir a privado con botón y autodestrucción
     if chat.type != ChatType.PRIVATE:
         username = await _bot_username(context)
-        text = "📬 Contáctame en privado para ver la ayuda completa."
+        text = ("🎯 Contáctame en privado para ver la ayuda completa."
+                if spooky else
+                "📬 Contáctame en privado para ver la ayuda completa.")
         url = f"https://t.me/{username}?start=help"
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
         m = await msg.reply_text(text, reply_markup=kb, disable_web_page_preview=True)
@@ -584,7 +691,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # En privado: ayuda completa (formato elegante)
-    header = "🐸 <b>Comandos disponibles</b>\n"
+    header = "🎃 <b>Hechizos disponibles</b>\n" if spooky else "🐸 <b>Comandos disponibles</b>\n"
     desc = (
         "<i>Usa los comandos con / y algunos atajos sin barra como</i> "
         "<code>afk</code>, <code>hora México</code> o <code>@all</code>.\n\n"
@@ -595,7 +702,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_tag = "🛡️ " if info.get("admin") else "• "
         lines.append(f"{admin_tag}<b>/{name}</b> — {html.escape(info.get('desc'))}")
 
-    text = header + desc + "\n".join(lines) + txt_help_triggers()
+    text = header + desc + "\n".join(lines) + txt_help_triggers(spooky)
     await msg.reply_text(text, parse_mode="HTML", disable_web_page_preview=True)
 
 async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -603,6 +710,24 @@ async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await safe_q_answer(q)
     fake_update = Update(update.update_id, message=q.message)
     await help_cmd(fake_update, context)
+
+async def halloween_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    chat = msg.chat
+    if not context.args:
+        cur = "ON" if is_spooky(chat.id) else "OFF"
+        return await msg.reply_text(f"🎃 Estado de Halloween: {cur}")
+    arg = context.args[0].lower()
+    if arg in ("on", "true", "1", "si", "sí"):
+        set_chat_setting(chat.id, "halloween", True)
+        return await msg.reply_text("🎃 Modo Halloween ACTIVADO. Que comience el aquelarre.")
+    if arg in ("off", "false", "0", "no"):
+        set_chat_setting(chat.id, "halloween", False)
+        return await msg.reply_text("🟢 Modo Halloween DESACTIVADO. Volvemos al mundo mortal.")
+    if arg in ("status", "estado"):
+        cur = "ON" if is_spooky(chat.id) else "OFF"
+        return await msg.reply_text(f"🎃 Estado de Halloween: {cur}")
+    await msg.reply_text("Uso: /halloween on | off | status")
 
 
 # =========================
@@ -618,9 +743,9 @@ async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reason = " ".join(context.args) if context.args else None
     AFK_USERS[user.id] = {"since": time.time(), "reason": reason, "username": (user.username or "").lower(), "first_name": user.first_name}
-    phrase = choose_afk_phrase().format(first=user.first_name)
+    phrase = choose_afk_phrase(chat.id).format(first=user.first_name)
     if reason:
-        phrase += " Motivo: " + reason
+        phrase += (" 🕯️ Motivo: " if is_spooky(chat.id) else " Motivo: ") + reason
     await msg.reply_text(phrase)
 
 async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -650,6 +775,7 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
     if not is_module_enabled(msg.chat.id, "afk_enabled"):
         return
 
+    spooky = is_spooky(msg.chat.id)
     if msg.reply_to_message and msg.reply_to_message.from_user:
         target = msg.reply_to_message.from_user
         if target.id in AFK_USERS:
@@ -657,9 +783,10 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
             since = data.get("since")
             reason = data.get("reason")
             dur = format_duration(time.time() - since)
-            txt = f"💤 {target.first_name} está AFK desde {dur}."
+            base = "💤👻 " if spooky else "💤 "
+            txt = f"{base}{target.first_name} está AFK desde {dur}."
             if reason:
-                txt += " Motivo: " + reason
+                txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
             await msg.reply_text(txt)
     if not msg.entities:
         return
@@ -674,9 +801,10 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
                 since = info.get("since")
                 reason = info.get("reason")
                 dur = format_duration(time.time() - since)
-                txt = f"💤 {first} está AFK desde {dur}."
+                base = "💤👻 " if spooky else "💤 "
+                txt = f"{base}{first} está AFK desde {dur}."
                 if reason:
-                    txt += " Motivo: " + reason
+                    txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
                 await msg.reply_text(txt)
 
 
@@ -688,6 +816,7 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
+    spooky = is_spooky(chat.id)
 
     target_user = None
     response_text = None
@@ -696,11 +825,11 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_user = msg.reply_to_message.from_user
         response_text = " ".join(context.args).strip()
         if not response_text:
-            await msg.reply_text(txt_autoresp_reply_usage())
+            await msg.reply_text(txt_autoresp_reply_usage(spooky))
             return
     else:
         if len(context.args) < 2:
-            await msg.reply_text(txt_autoresp_usage())
+            await msg.reply_text(txt_autoresp_usage(spooky))
             return
         mention = context.args[0]
         response_text = " ".join(context.args[1:]).strip()
@@ -716,7 +845,7 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 uid = int(uid_str)
                 break
         if uid is None:
-            await msg.reply_text(txt_autoresp_not_found())
+            await msg.reply_text(txt_autoresp_not_found(spooky))
             return
         member = await context.bot.get_chat_member(chat.id, uid)
         target_user = member.user
@@ -724,7 +853,7 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat.id not in AUTO_RESPONDERS:
         AUTO_RESPONDERS[chat.id] = {}
     AUTO_RESPONDERS[chat.id][target_user.id] = response_text
-    await msg.reply_text(txt_autoresp_on(target_user.first_name, response_text))
+    await msg.reply_text(txt_autoresp_on(spooky, target_user.first_name, response_text))
 
 async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -732,6 +861,7 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
+    spooky = is_spooky(chat.id)
     target_user = None
 
     if msg.reply_to_message:
@@ -746,19 +876,19 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
                 uid = int(uid_str)
                 break
         if uid is None:
-            return await msg.reply_text(txt_autoresp_not_found())
+            return await msg.reply_text(txt_autoresp_not_found(spooky))
         member = await context.bot.get_chat_member(chat.id, uid)
         target_user = member.user
 
     if not target_user:
-        await msg.reply_text(txt_autoresp_off_usage())
+        await msg.reply_text(txt_autoresp_off_usage(spooky))
         return
 
     if chat.id in AUTO_RESPONDERS and target_user.id in AUTO_RESPONDERS[chat.id]:
         del AUTO_RESPONDERS[chat.id][target_user.id]
-        await msg.reply_text(txt_autoresp_off(target_user.first_name))
+        await msg.reply_text(txt_autoresp_off(spooky, target_user.first_name))
     else:
-        await msg.reply_text(txt_autoresp_none(target_user.first_name))
+        await msg.reply_text(txt_autoresp_none(spooky, target_user.first_name))
 
 
 # =========================
@@ -812,65 +942,69 @@ def format_time_in_tz(tz: str) -> str:
 
 async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
+    spooky = is_spooky(msg.chat.id)
     query = " ".join(context.args).strip() if context.args else None
     resolved = resolve_country_to_iso2_and_name(query)
     if not resolved:
-        return await msg.reply_text(txt_hora_unknown())
+        return await msg.reply_text(txt_hora_unknown(spooky))
     iso2, country_name = resolved
     tz = pick_timezone_for_country(iso2)
     flag = flag_emoji(iso2)
     hhmmss = format_time_in_tz(tz)
-    await msg.reply_text(txt_hora_line(flag, country_name, hhmmss))
+    await msg.reply_text(txt_hora_line(spooky, flag, country_name, hhmmss))
 
 async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text:
         return
+    spooky = is_spooky(msg.chat.id)
     m = re.match(r"(?is)^\s*hora\b(.*)$", msg.text.strip())
     if not m:
         return
     query = m.group(1).strip() or None
     resolved = resolve_country_to_iso2_and_name(query)
     if not resolved:
-        return await msg.reply_text(txt_hora_unknown())
+        return await msg.reply_text(txt_hora_unknown(spooky))
     iso2, country_name = resolved
     tz = pick_timezone_for_country(iso2)
     flag = flag_emoji(iso2)
     hhmmss = format_time_in_tz(tz)
-    await msg.reply_text(txt_hora_line(flag, country_name, hhmmss))
+    await msg.reply_text(txt_hora_line(spooky, flag, country_name, hhmmss))
 
 
 # =========================
 # @ALL
 async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[bool, str]:
+    spooky = is_spooky(chat_id)
     if not await is_admin(context, chat_id, user_id):
-        return False, txt_all_perm()
+        return False, txt_all_perm(spooky)
     cfg = get_chat_settings(chat_id)
     if not cfg.get("all_enabled", True):
-        return False, txt_all_disabled()
+        return False, txt_all_disabled(spooky)
     cd = cfg.get("all_cooldown_sec", 60)
     if _last_all.get(chat_id) and time.time() - _last_all[chat_id] < cd:
-        return False, txt_all_cooldown()
+        return False, txt_all_cooldown(spooky)
     return True, ""
 
 async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
+    spooky = is_spooky(chat.id)
     await prune_roster(chat.id, context)
     members = get_chat_roster(chat.id)
     if not members:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_users())
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_users(spooky))
         return
     parts = build_mentions_html(members)
     if not parts:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets())
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets(spooky))
         return
 
-    header = txt_all_header(by_user.first_name, extra)
+    header = txt_all_header(spooky, by_user.first_name, extra)
     try:
         await context.bot.send_message(chat_id=chat.id, text=header)
     except Exception as e:
         logging.exception("Fallo cabecera @all", exc_info=e)
 
-    motivo_html = ("\n\n" + txt_motivo_label() + html.escape(extra)) if extra else ""
+    motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
     for block in parts:
         try:
             body = block + motivo_html
@@ -881,43 +1015,46 @@ async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_u
     _last_all[chat.id] = time.time()
 
 async def confirm_all(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
+    spooky = is_spooky(chat_id)
     data_yes = f"allconfirm:{chat_id}:yes:{initiator_id}"
     data_no = f"allconfirm:{chat_id}:no:{initiator_id}"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(btn_confirm(), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(), callback_data=data_no)]
+        [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
+         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
     ])
 
 async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     chat_id = q.message.chat.id
+    spooky = is_spooky(chat_id)
     await safe_q_answer(q)
     try:
         _, cid, action, initiator = q.data.split(":")
         cid = int(cid)
         initiator = int(initiator)
     except Exception:
-        return await q.edit_message_text(txt_all_confirm_bad())
+        return await q.edit_message_text(txt_all_confirm_bad(spooky))
     if q.from_user.id != initiator:
-        return await q.reply_text(txt_only_initiator())
+        return await q.reply_text(txt_only_initiator(spooky))
     if action == "yes":
         extra = context.user_data.get("pending_all", "")
-        await q.edit_message_text(txt_sending_mentions())
+        await q.edit_message_text(txt_sending_mentions(spooky))
         chat = await context.bot.get_chat(cid)
         await execute_all(chat, context, extra, q.from_user)
         context.user_data.pop("pending_all", None)
     else:
         context.user_data.pop("pending_all", None)
-        await q.edit_message_text(txt_canceled())
+        await q.edit_message_text(txt_canceled(spooky))
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
+    spooky = is_spooky(msg.chat.id)
     context.user_data.pop("pending_all", None)
     context.user_data.pop("pending_admin", None)
-    await msg.reply_text(txt_cancel_cmd())
+    await msg.reply_text(txt_cancel_cmd(spooky))
 
 async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -931,7 +1068,7 @@ async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = get_chat_settings(chat.id)
     if cfg.get("all_confirm", True):
         kb = await confirm_all(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_all_confirm(), reply_markup=kb)
+        await msg.reply_text(txt_all_confirm(is_spooky(chat.id)), reply_markup=kb)
         context.user_data["pending_all"] = extra
         return
     await execute_all(chat, context, extra, user)
@@ -952,7 +1089,7 @@ async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = get_chat_settings(chat.id)
     if cfg.get("all_confirm", True):
         kb = await confirm_all(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_all_confirm(), reply_markup=kb)
+        await msg.reply_text(txt_all_confirm(is_spooky(chat.id)), reply_markup=kb)
         context.user_data["pending_all"] = extra
         return
     await execute_all(chat, context, extra, user)
@@ -961,12 +1098,13 @@ async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 # @ADMIN
 async def _check_admin_ping_permissions(context, chat_id: int) -> tuple[bool, str]:
+    spooky = is_spooky(chat_id)
     cfg = get_chat_settings(chat_id)
     if not cfg.get("admin_enabled", True):
-        return False, txt_admin_disabled()
+        return False, txt_admin_disabled(spooky)
     cd = cfg.get("admin_cooldown_sec", 60)
     if _admin_last.get(chat_id) and time.time() - _admin_last[chat_id] < cd:
-        return False, txt_admin_cooldown()
+        return False, txt_admin_cooldown(spooky)
     return True, ""
 
 async def _get_admin_members(chat, context: ContextTypes.DEFAULT_TYPE) -> List[dict]:
@@ -1000,17 +1138,18 @@ def _build_mentions_html_from_basic(members: List[dict]) -> List[str]:
     return chunks
 
 async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
-    await prune_roster(chat.id, context)
+    spooky = is_spooky(chat.id)
+    await prune_roster(chat.id, context)  # <-- Pega aquí esta línea
     admins = await _get_admin_members(chat, context)
     if not admins:
-        return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins())
+        return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins(spooky))
     parts = _build_mentions_html_from_basic(admins)
-    header = txt_admin_header(by_user.first_name, extra)
+    header = txt_admin_header(spooky, by_user.first_name, extra)
     try:
         await context.bot.send_message(chat_id=chat.id, text=header)
     except Exception:
         logging.exception("Fallo cabecera @admin")
-    motivo_html = ("\n\n" + txt_motivo_label() + html.escape(extra)) if extra else ""
+    motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
     for block in parts:
         try:
             body = block + motivo_html
@@ -1021,34 +1160,36 @@ async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by
     _admin_last[chat.id] = time.time()
 
 async def confirm_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
+    spooky = is_spooky(chat_id)
     data_yes = f"adminconfirm:{chat_id}:yes:{initiator_id}"
     data_no = f"adminconfirm:{chat_id}:no:{initiator_id}"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(btn_confirm(), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(), callback_data=data_no)]
+        [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
+         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
     ])
 
 async def callback_adminconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     chat_id = q.message.chat.id
+    spooky = is_spooky(chat_id)
     await safe_q_answer(q)
     try:
         _, cid, action, initiator = q.data.split(":")
         cid = int(cid)
         initiator = int(initiator)
     except Exception:
-        return await q.edit_message_text(txt_all_confirm_bad())
+        return await q.edit_message_text(txt_all_confirm_bad(spooky))
     if q.from_user.id != initiator:
-        return await q.reply_text(txt_only_initiator())
+        return await q.reply_text(txt_only_initiator(spooky))
     if action == "yes":
         extra = context.user_data.get("pending_admin", "")
-        await q.edit_message_text(txt_admin_confirm())
+        await q.edit_message_text(txt_calling_admins(spooky))
         chat = await context.bot.get_chat(cid)
         await execute_admin(chat, context, extra, q.from_user)
         context.user_data.pop("pending_admin", None)
     else:
         context.user_data.pop("pending_admin", None)
-        await q.edit_message_text(txt_canceled())
+        await q.edit_message_text(txt_canceled(spooky))
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -1061,7 +1202,7 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = get_chat_settings(chat.id)
     if cfg.get("admin_confirm", True):
         kb = await confirm_admin(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_admin_confirm(), reply_markup=kb)
+        await msg.reply_text(txt_admin_confirm(is_spooky(chat.id)), reply_markup=kb)
         context.user_data["pending_admin"] = extra
         return
     await execute_admin(chat, context, extra, user)
@@ -1082,14 +1223,14 @@ async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_T
     cfg = get_chat_settings(chat.id)
     if cfg.get("admin_confirm", True):
         kb = await confirm_admin(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_admin_confirm(), reply_markup=kb)
+        await msg.reply_text(txt_admin_confirm(is_spooky(chat.id)), reply_markup=kb)
         context.user_data["pending_admin"] = extra
         return
     await execute_admin(chat, context, extra, user)
 
 
 # =========================
-# ESTADÍSTICAS TRES EN RAYA (omitted details for brevity - unchanged)
+# ESTADÍSTICAS TRES EN RAYA
 def _ttt_stats_load() -> dict:
     s = load_settings()
     return s.setdefault("_ttt_stats", {})
@@ -1134,8 +1275,13 @@ def _ttt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
     return "\n".join(out)
 
 
+
+# register detector in main manually
+
+
+
 # =========================
-# TRES EN RAYA (handlers) - unchanged
+# TRES EN RAYA (handlers)
 def _ttt_get_game(chat_id: int, msg_id: int) -> Dict[str, Any] | None:
     return TTT_GAMES.get(chat_id, {}).get(msg_id)
 
@@ -1180,19 +1326,20 @@ def _ttt_board_markup(chat_id: int, msg_id: int, board: list[str], playing: bool
         rows.append(btns)
     return InlineKeyboardMarkup(rows)
 
-def _ttt_header_text(state: Dict[str, Any]) -> str:
+def _ttt_header_text(spooky: bool, state: Dict[str, Any]) -> str:
     pX = state["players"].get("X_name", "X")
     pO = state["players"].get("O_name", "O")
     turn = state.get("turn", "X")
     status = state.get("status")
     if status == "waiting":
-        return f"Tres en raya — Esperando oponente…\n{pX} juega con {TTT_X}."
+        return ("🎃 " if spooky else "") + f"Tres en raya — Esperando oponente…\n{pX} juega con {TTT_X}."
     if status == "playing":
+        arrow = "🦇" if spooky else "➡️"
         now = pX if turn == "X" else pO
-        return f"Tres en raya — Turno de {now} ➡️"
+        return ("👻 " if spooky else "") + f"Tres en raya — Turno de {now} {arrow}"
     if status == "ended":
         result = state.get("result", "fin de partida")
-        return f"Tres en raya — {result}"
+        return ("🕯️ " if spooky else "") + f"Tres en raya — {result}"
     return "Tres en raya"
 
 def _ttt_footer_markup(chat_id: int, msg_id: int, state: Dict[str, Any]) -> InlineKeyboardMarkup:
@@ -1216,12 +1363,20 @@ def _ttt_can_play(state: Dict[str, Any], user_id: int) -> bool:
     return pid == user_id
 
 async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /ttt  o  /tres
+    - Si respondes a un mensaje, desafías a ese usuario.
+    - Si pasas @usuario en args, reto directo.
+    - Si no, partida abierta (botón Unirme).
+    """
     msg = update.message
     chat = msg.chat
 
     # Respect module toggle
     if not is_module_enabled(chat.id, "ttt_enabled"):
         return await msg.reply_text("El módulo TTT está desactivado en este chat.")
+
+    spooky = is_spooky(chat.id)
 
     pX = msg.from_user
     opponent_id = None
@@ -1257,7 +1412,7 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "created_ts": time.time()
     }
 
-    text = _ttt_header_text(state)
+    text = _ttt_header_text(spooky, state)
 
     # Envia sin teclado para obtener message_id real (evita msg_id=0)
     sent = await context.bot.send_message(chat_id=chat.id, text=text)
@@ -1273,11 +1428,167 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Ahora sí, añade teclado con msg_id real
     kb = _ttt_footer_markup(chat.id, sent.message_id, state)
-    await sent.edit_text(_ttt_header_text(state), reply_markup=kb)
+    await sent.edit_text(_ttt_header_text(spooky, state), reply_markup=kb)
+
+async def ttt_join_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
+    q = update.callback_query
+    user = q.from_user
+    spooky = is_spooky(chat_id)
+    state = _ttt_get_game(chat_id, msg_id)
+    if not state:
+        return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
+    if state["status"] != "waiting":
+        return await safe_q_answer(q, "Esta partida ya comenzó.", show_alert=True)
+    if state["players"].get("O_id") and state["players"]["O_id"] != user.id:
+        return await safe_q_answer(q, "Esta partida era un reto a otra persona.", show_alert=True)
+    if state["players"]["X_id"] == user.id:
+        return await safe_q_answer(q, "No puedes ser tu propio oponente 😅", show_alert=True)
+
+    state["players"]["O_id"] = user.id
+    state["players"]["O_name"] = user.first_name
+    state["status"] = "playing"
+    state["turn"] = random.choice(["X", "O"])
+    _ttt_set_game(chat_id, msg_id, state)
+
+    await safe_q_answer(q, "¡Partida iniciada!")
+    await q.edit_message_text(_ttt_header_text(spooky, state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
+
+async def ttt_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
+    q = update.callback_query
+    user = q.from_user
+    spooky = is_spooky(chat_id)
+    state = _ttt_get_game(chat_id, msg_id)
+    if not state:
+        return await safe_q_answer(q, "Nada que cancelar.", show_alert=True)
+    if state["status"] == "waiting":
+        if user.id != state["players"]["X_id"] and not await is_admin(context, chat_id, user.id):
+            return await safe_q_answer(q, "No puedes cancelar esta partida.", show_alert=True)
+        _ttt_del_game(chat_id, msg_id)
+        await safe_q_answer(q)
+        return await q.edit_message_text("❌ Partida cancelada." if spooky else "❌ Partida cancelada.")
+    return await safe_q_answer(q, "La partida ya está en curso.", show_alert=True)
+
+async def ttt_rematch_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
+    q = update.callback_query
+    spooky = is_spooky(chat_id)
+    old = _ttt_get_game(chat_id, msg_id)
+    if not old:
+        return await safe_q_answer(q, "No hay partida para reiniciar.", show_alert=True)
+    new_state = {
+        "board": _ttt_new_board(),
+        "status": "playing",
+        "turn": random.choice(["X", "O"]),
+        "players": {
+            "X_id": old["players"]["O_id"],
+            "X_name": old["players"]["O_name"],
+            "O_id": old["players"]["X_id"],
+            "O_name": old["players"]["X_name"],
+        },
+        "created_ts": time.time()
+    }
+    _ttt_set_game(chat_id, msg_id, new_state)
+    await safe_q_answer(q, "¡Nueva partida!")
+    await q.edit_message_text(_ttt_header_text(spooky, new_state), reply_markup=_ttt_footer_markup(chat_id, msg_id, new_state))
+
+async def ttt_play_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int, idx: int):
+    q = update.callback_query
+    user = q.from_user
+    spooky = is_spooky(chat_id)
+    state = _ttt_get_game(chat_id, msg_id)
+    if not state:
+        return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
+    if state["status"] != "playing":
+        return await safe_q_answer(q, "La partida no está disponible.", show_alert=True)
+    if not _ttt_can_play(state, user.id):
+        return await safe_q_answer(q, "No es tu turno.", show_alert=True)
+
+    board = state["board"]
+    if board[idx] != TTT_EMPTY:
+        return await safe_q_answer(q, "Esa casilla ya está ocupada.", show_alert=True)
+
+    symbol = TTT_X if state["turn"] == "X" else TTT_O
+    board[idx] = symbol
+
+    winner = _ttt_winner(board)
+    if winner:
+        px = state["players"]["X_name"]
+        po = state["players"]["O_name"]
+        x_id = state["players"]["X_id"]
+        o_id = state["players"]["O_id"]
+        if winner == TTT_X:
+            ganador, ganador_id = px, x_id
+            perdedor, perdedor_id = po, o_id
+        else:
+            ganador, ganador_id = po, o_id
+            perdedor, perdedor_id = px, x_id
+        state["status"] = "ended"
+        state["result"] = f"¡{ganador} ha ganado!"
+        if ganador_id and perdedor_id:
+            _ttt_stats_record_winloss(chat_id, ganador_id, ganador or "Jugador", perdedor_id, perdedor or "Jugador")
+    elif _ttt_full(board):
+        px = state["players"]["X_name"]
+        po = state["players"]["O_name"]
+        x_id = state["players"]["X_id"]
+        o_id = state["players"]["O_id"]
+        state["status"] = "ended"
+        state["result"] = "Empate. Buen duelo."
+        if x_id and o_id:
+            _ttt_stats_record_draw(chat_id, x_id, px or "Jugador X", o_id, po or "Jugador O")
+    else:
+        state["turn"] = "O" if state["turn"] == "X" else "X"
+
+    _ttt_set_game(chat_id, msg_id, state)
+    await safe_q_answer(q)
+    await q.edit_message_text(_ttt_header_text(spooky, state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
+
+# router callbacks del TTT
+async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    try:
+        parts = q.data.split(":")
+        if parts[0] != "ttt":
+            return await safe_q_answer(q)
+        action = parts[1]
+        chat_id = int(parts[2])
+        msg_id = int(parts[3])
+
+        # Denegar callbacks si el módulo está desactivado
+        if not is_module_enabled(chat_id, "ttt_enabled"):
+            return await safe_q_answer(q, "El módulo TTT está desactivado en este chat.", show_alert=True)
+
+        if action == "play":
+            idx = int(parts[4])
+            return await ttt_play_cb(update, context, chat_id, msg_id, idx)
+        elif action == "join":
+            return await ttt_join_cb(update, context, chat_id, msg_id)
+        elif action == "cancel":
+            return await ttt_cancel_cb(update, context, chat_id, msg_id)
+        elif action == "rematch":
+            return await ttt_rematch_cb(update, context, chat_id, msg_id)
+        else:
+            return await safe_q_answer(q)
+    except Exception:
+        logging.exception("ttt router error")
+        try:
+            await safe_q_answer(q, "Error en la jugada.", show_alert=True)
+        except Exception:
+            pass
 
 
 # =========================
-# ON MESSAGE (incluye roster, AFK, autoresponder, name change)
+# TOP TTT
+async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /top_ttt [wins|draws|losses]
+    Muestra el ranking del chat para la métrica indicada (por defecto: wins).
+    """
+    msg = update.message
+    metric = (context.args[0].lower() if context.args else "wins")
+    await context.bot.send_message(chat_id=msg.chat.id, text=_ttt_stats_top(msg.chat.id, metric))
+
+
+# =========================
+# ON MESSAGE
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.from_user or not msg.text:
@@ -1330,9 +1641,9 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_module_enabled(chat.id, "afk_enabled") and user.id in AFK_USERS:
         info = AFK_USERS.pop(user.id)
         since = info.get("since")
-        phrase = choose_return_phrase().format(first=user.first_name)
+        phrase = choose_return_phrase(chat.id).format(first=user.first_name)
         if since:
-            phrase += " (fuera " + format_duration(time.time() - since) + ")"
+            phrase += (" ⏳ (fuera " if is_spooky(chat.id) else " (fuera ") + format_duration(time.time() - since) + ")"
         await msg.reply_text(phrase)
 
     # autoresponder
@@ -1362,6 +1673,7 @@ MODULES: Dict[str, Dict[str, str]] = {
     "ttt": {"key": "ttt_enabled", "label": "TTT"},
     "trivia": {"key": "trivia_enabled", "label": "Trivia"},
     "namechg": {"key": "notify_name_change", "label": "SangMata"},
+    "halloween": {"key": "halloween", "label": "Halloween"},
 }
 
 DEFAULTS: Dict[str, bool] = {
@@ -1372,6 +1684,7 @@ DEFAULTS: Dict[str, bool] = {
     "ttt_enabled": True,
     "trivia_enabled": False,
     "notify_name_change": False,
+    "halloween": False,
 }
 
 
@@ -1400,6 +1713,7 @@ def tiktok_downloader(url: str) -> bytes | None:
     except Exception:
         return None
 
+
 async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text:
@@ -1419,7 +1733,6 @@ async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("No pude descargar el vídeo de TikTok.")
         return
     await context.bot.send_video(chat_id=msg.chat.id, video=vid)
-
 
 def _with_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(DEFAULTS)
@@ -1535,12 +1848,13 @@ HUB_MODULES = {
     "admin": {"title": "@admin", "desc": "Avisa solo al equipo de administradores.", "cmds": ["@admin [motivo]"]},
     "autoresp": {"title": "Autoresponder", "desc": "Respuestas automáticas personalizadas por usuario.", "cmds": ["autoresponder", "autoresponder_off"]},
     "ttt": {"title": "Tres en raya", "desc": "Juega partidas de TTT con el grupo y consulta clasificaciones.", "cmds": ["ttt", "top_ttt"]},
-    "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_import", "trivia_start", "trivia_stop"]},
+    "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_on", "trivia_off", "trivia_stats"]},
     "namechg": {"title": "SangMata", "desc": "Notifica cambios de nombre y @ cuando la persona habla en el grupo.", "cmds": []},
+    "halloween": {"title": "Halloween", "desc": "Cambia el tema de los mensajes del bot.", "cmds": ["halloween on|off"]},
 }
 
 def build_hub_keyboard() -> InlineKeyboardMarkup:
-    codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg"]
+    codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg", "halloween"]
     rows = []
     for i in range(0, len(codes), 2):
         chunk = codes[i:i + 2]
@@ -1627,422 +1941,24 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# TRIVIA: pool, estado, stats, import con confirmación, poll handlers y scheduler
-def _ensure_trivia_files():
-    os.makedirs(PERSIST_DIR, exist_ok=True)
-    os.makedirs(POOL_BACKUP_DIR, exist_ok=True)
-    if not os.path.exists(POOL_FILE):
-        with open(POOL_FILE, "w", encoding="utf-8") as f:
-            json.dump([], f, ensure_ascii=False, indent=2)
-    if not os.path.exists(TRIVIA_STATE_FILE):
-        with open(TRIVIA_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump({}, f, ensure_ascii=False, indent=2)
-    if not os.path.exists(TRIVIA_STATS_FILE):
-        with open(TRIVIA_STATS_FILE, "w", encoding="utf-8") as f:
-            json.dump({}, f, ensure_ascii=False, indent=2)
-    if not os.path.exists(TRIVIA_ADMIN_LOG_FILE):
-        with open(TRIVIA_ADMIN_LOG_FILE, "w", encoding="utf-8") as f:
-            json.dump({"entries": []}, f, ensure_ascii=False, indent=2)
-
-def _load_json_file(path: str, default):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
-
-def _save_json_file(path: str, data):
-    try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        logging.exception("Error al guardar JSON: %s", path)
-
-def load_pool() -> List[dict]:
-    return _load_json_file(POOL_FILE, [])
-
-def save_pool(pool: List[dict]) -> None:
-    _save_json_file(POOL_FILE, pool)
-
-def load_trivia_state() -> dict:
-    return _load_json_file(TRIVIA_STATE_FILE, {})
-
-def save_trivia_state(state: dict) -> None:
-    _save_json_file(TRIVIA_STATE_FILE, state)
-
-def load_trivia_stats() -> dict:
-    return _load_json_file(TRIVIA_STATS_FILE, {})
-
-def save_trivia_stats(stats: dict) -> None:
-    _save_json_file(TRIVIA_STATS_FILE, stats)
-
-def log_admin_action(action: str, admin_id: int, detail: dict) -> None:
-    log = _load_json_file(TRIVIA_ADMIN_LOG_FILE, {"entries": []})
-    entries = log.setdefault("entries", [])
-    entries.append({"ts": datetime.utcnow().isoformat(), "admin_id": admin_id, "accion": action, "detalle": detail})
-    _save_json_file(TRIVIA_ADMIN_LOG_FILE, log)
-
-def _backup_pool():
-    try:
-        pool = load_pool() or []
-        ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-        os.makedirs(POOL_BACKUP_DIR, exist_ok=True)
-        fname = os.path.join(POOL_BACKUP_DIR, f"pool_backup_{ts}.json")
-        _save_json_file(fname, pool)
-        return fname
-    except Exception:
-        logging.exception("Error creando backup pool")
-        return None
-
-def _validate_pool_list(raw) -> List[dict]:
-    out = []
-    if not isinstance(raw, list):
-        return out
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        q = item.get("question") or item.get("q")
-        choices = item.get("choices") or item.get("options")
-        ans = item.get("answer")
-        if not q or not isinstance(choices, list) or len(choices) < 2:
-            continue
-        try:
-            correct = int(ans) if ans is not None else 0
-        except Exception:
-            correct = 0
-        rec = {
-            "id": int(item.get("id", 0)) if item.get("id") else 0,
-            "question": str(q),
-            "choices": [str(x) for x in choices],
-            "answer": max(0, min(correct, len(choices) - 1))
-        }
-        out.append(rec)
-    return out
-
-def _letra(idx: int) -> str:
-    letters = "ABCD"
-    return letters[idx] if 0 <= idx < len(letters) else str(idx)
-
-# /trivia_import <url> [merge|replace]
-async def trivia_import_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg:
-        return
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
-        return await msg.reply_text("Solo los administradores del chat pueden importar preguntas.")
-    if not context.args:
-        return await msg.reply_text("Uso: /trivia_import <url> [merge|replace]")
-    url = context.args[0].strip()
-    mode = (context.args[1].strip().lower() if len(context.args) > 1 else "merge")
-    if mode not in ("merge", "replace"):
-        mode = "merge"
-
-    await msg.reply_text("Descargando y validando preguntas...")
-
-    try:
-        from urllib.request import urlopen
-        with urlopen(url, timeout=20) as r:
-            raw = r.read().decode("utf-8", errors="replace")
-        parsed = json.loads(raw)
-    except Exception:
-        logging.exception("Error descargando/parseando pool desde URL")
-        return await msg.reply_text("No pude descargar o parsear el contenido desde la URL indicada. Debe ser un JSON (lista de preguntas).")
-
-    valid = _validate_pool_list(parsed)
-    if not valid:
-        return await msg.reply_text("El JSON no contiene preguntas válidas. Formato: lista de objetos con question, choices (lista), answer (índice).")
-
-    context.user_data["pending_trivia_import"] = {"url": url, "mode": mode, "questions": valid}
-    yes = f"triviaimport:{msg.chat.id}:yes:{mode}:{msg.from_user.id}"
-    cancel = f"triviaimport:{msg.chat.id}:no:0:{msg.from_user.id}"
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"Confirmar {mode.upper()} ({len(valid)} preguntas)", callback_data=yes)],
-        [InlineKeyboardButton("Cancelar", callback_data=cancel)],
-    ])
-    summary = f"Preparado para importar {len(valid)} preguntas desde:\n{url}\n\nModo: {mode}\nConfirma para aplicar los cambios."
-    await msg.reply_text(summary, reply_markup=kb)
-
-async def callback_trivia_import_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await safe_q_answer(q)
-    data = q.data or ""
-    parts = data.split(":")
-    if len(parts) != 5 or parts[0] != "triviaimport":
-        return
-    _, chat_id_s, action, mode, initiator_s = parts
-    try:
-        initiator = int(initiator_s)
-    except Exception:
-        return await q.edit_message_text("Confirmación inválida.")
-    if q.from_user.id != initiator:
-        return await q.reply_text("Solo puede confirmar quien inició la importación.")
-    if action == "no":
-        context.user_data.pop("pending_trivia_import", None)
-        return await q.edit_message_text("Importación cancelada.")
-    pending = context.user_data.get("pending_trivia_import")
-    if not pending:
-        return await q.edit_message_text("No hay importación pendiente o expiró.")
-    questions = pending.get("questions", [])
-    url = pending.get("url", "")
-    chosen_mode = mode if mode in ("merge", "replace") else pending.get("mode", "merge")
-    bfile = _backup_pool()
-    current = load_pool() or []
-    if chosen_mode == "replace":
-        maxid = max((int(x.get("id", 0)) for x in current), default=0)
-        new_pool = []
-        for qobj in questions:
-            if not qobj.get("id"):
-                maxid += 1
-                qobj["id"] = maxid
-            new_pool.append(qobj)
-        save_pool(new_pool)
-        context.user_data.pop("pending_trivia_import", None)
-        texto = f"Pool reemplazado con éxito ({len(new_pool)} preguntas). Backup: {os.path.basename(bfile) if bfile else 'sin backup'}."
-        await q.edit_message_text(texto)
-        log_admin_action("trivia_import_replace", q.from_user.id, {"url": url, "count": len(new_pool), "backup": bfile})
-        return
-    try:
-        existing_by_id = {int(x.get("id", 0)): x for x in current if x.get("id")}
-        maxid = max(existing_by_id.keys(), default=0)
-        merged = list(current)
-        updated = 0
-        added = 0
-        for qobj in questions:
-            qid = int(qobj.get("id", 0)) if qobj.get("id") else 0
-            if qid and qid in existing_by_id:
-                for i, ee in enumerate(merged):
-                    if int(ee.get("id", 0)) == qid:
-                        merged[i] = qobj
-                        break
-                updated += 1
-            else:
-                maxid += 1
-                qobj["id"] = maxid
-                merged.append(qobj)
-                added += 1
-        save_pool(merged)
-        context.user_data.pop("pending_trivia_import", None)
-        texto = f"Importación MERGE completada. Añadidas: {added}. Actualizadas: {updated}. Backup: {os.path.basename(bfile) if bfile else 'sin backup'}."
-        await q.edit_message_text(texto)
-        log_admin_action("trivia_import_merge", q.from_user.id, {"url": url, "count": len(questions), "added": added, "updated": updated, "backup": bfile})
-    except Exception:
-        logging.exception("Error al mergear pool")
-        await q.edit_message_text("Ocurrió un error al aplicar la importación. Revisa los logs.")
-
-# /trivia_start (admin) -> fuerza una pregunta inmediatamente (quiz poll)
-async def trivia_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg:
-        return
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
-        return await msg.reply_text("Solo los administradores del chat pueden iniciar una trivia.")
-    if not is_module_enabled(msg.chat.id, "trivia_enabled"):
-        return await msg.reply_text("El módulo Trivia está desactivado en este chat.")
-    pool = load_pool() or []
-    valid = [p for p in pool if isinstance(p, dict) and p.get("choices") and len(p.get("choices")) >= 2]
-    if not valid:
-        return await msg.reply_text("Pool vacío o sin preguntas válidas. Añade preguntas con /trivia_import.")
-    pregunta = random.choice(valid)
-    qtext = pregunta.get("question")
-    options = pregunta.get("choices")
-    correct = int(pregunta.get("answer", 0))
-    intro = await context.bot.send_message(chat_id=msg.chat.id, text="Trivia — ¡El primero que acierte gana! (5 minutos)")
-    poll_msg = await context.bot.send_poll(
-        chat_id=msg.chat.id,
-        question=qtext,
-        options=options,
-        type="quiz",
-        correct_option_id=correct,
-        is_anonymous=False,
-        open_period=300,
-    )
-    poll = poll_msg.poll
-    poll_id = poll.id
-    state = load_trivia_state()
-    state[str(poll_id)] = {
-        "chat_id": msg.chat.id,
-        "message_id_intro": intro.message_id,
-        "message_id_poll": poll_msg.message_id,
-        "question_id": int(pregunta.get("id", 0)),
-        "started_at": datetime.utcnow().isoformat(),
-        "finished": False,
-        "winner": None,
-        "answers": {},
-        "question_snapshot": {"question": qtext, "choices": options, "answer": correct},
-    }
-    save_trivia_state(state)
-    await msg.reply_text(f"Ronda iniciada (ID {pregunta.get('id', 0)}).")
-
-# /trivia_stop (admin) -> detener la ronda activa en el chat
-async def trivia_stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg:
-        return
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
-        return await msg.reply_text("Solo los administradores del chat pueden ejecutar esto.")
-    state = load_trivia_state()
-    found = None
-    for pid, entry in list(state.items()):
-        if entry.get("chat_id") == msg.chat.id and not entry.get("finished"):
-            found = (pid, entry)
-            break
-    if not found:
-        return await msg.reply_text("No hay ninguna ronda activa en este chat.")
-    pid, entry = found
-    try:
-        await context.bot.stop_poll(chat_id=msg.chat.id, message_id=entry["message_id_poll"])
-    except Exception:
-        pass
-    entry["finished"] = True
-    entry["winner"] = None
-    save_trivia_state(state)
-    correct = int(entry["question_snapshot"]["answer"])
-    option_text = entry["question_snapshot"]["choices"][correct]
-    await context.bot.send_message(chat_id=msg.chat.id, text=f"Ronda cancelada por {msg.from_user.first_name}. Respuesta correcta: {_letra(correct)}) {html.escape(option_text)}.")
-    await msg.reply_text("Ronda cancelada.")
-
-# Poll answer handler (detecta ganador si es la primera respuesta correcta)
-async def poll_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pa = update.poll_answer
-    poll_id = pa.poll_id
-    user = pa.user
-    option_ids = pa.option_ids
-    if not option_ids:
-        return
-    chosen = int(option_ids[0])
-    state = load_trivia_state()
-    entry = state.get(str(poll_id))
-    if not entry or entry.get("finished"):
-        return
-    uid = str(user.id)
-    if uid in entry.get("answers", {}):
-        return
-    entry.setdefault("answers", {})[uid] = {"choice_index": chosen, "answered_at": datetime.utcnow().isoformat()}
-    correct = int(entry["question_snapshot"]["answer"])
-    if chosen == correct and entry.get("winner") is None:
-        entry["winner"] = {"user_id": user.id, "name": user.first_name, "choice_index": chosen, "answered_at": datetime.utcnow().isoformat()}
-        entry["finished"] = True
-        save_trivia_state(state)
-        try:
-            await context.bot.stop_poll(chat_id=entry["chat_id"], message_id=entry["message_id_poll"])
-        except Exception:
-            pass
-        stats = load_trivia_stats()
-        chat_stats = stats.setdefault(str(entry["chat_id"]), {"users": {}, "total_questions": 0, "last_updated": None})
-        users = chat_stats.setdefault("users", {})
-        u = users.setdefault(str(user.id), {"points": 0, "wins": 0, "attempts": 0, "correct": 0})
-        u["points"] = u.get("points", 0) + 1
-        u["wins"] = u.get("wins", 0) + 1
-        u["correct"] = u.get("correct", 0) + 1
-        u["attempts"] = u.get("attempts", 0) + 1
-        chat_stats["last_updated"] = datetime.utcnow().isoformat()
-        save_trivia_stats(stats)
-        option_text = entry["question_snapshot"]["choices"][chosen]
-        user_mention = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name or "")}</a>'
-        texto = f"¡El ganador ha sido {user_mention}! La respuesta correcta era {_letra(chosen)}) {html.escape(option_text)}. +1 punto. Usa /trivia_top para ver el top."
-        await context.bot.send_message(chat_id=entry["chat_id"], text=texto, parse_mode="HTML")
-    else:
-        save_trivia_state(state)
-
-# Poll update handler (cuando el poll se cierra por tiempo)
-async def poll_update_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    poll = update.poll
-    poll_id = getattr(poll, "id", None)
-    state = load_trivia_state()
-    entry = state.get(str(poll_id))
-    if not entry:
-        return
-    if getattr(poll, "is_closed", False) and not entry.get("finished"):
-        entry["finished"] = True
-        save_trivia_state(state)
-        correct = int(entry["question_snapshot"]["answer"])
-        option_text = entry["question_snapshot"]["choices"][correct]
-        texto = f"Tiempo agotado. Respuesta correcta: {_letra(correct)}) {html.escape(option_text)}."
-        await context.bot.send_message(chat_id=entry["chat_id"], text=texto, parse_mode="HTML")
-
-def _run_trivia_for_chat_sync(context, chat_id):
-    try:
-        pool = load_pool() or []
-        valid = [p for p in pool if isinstance(p, dict) and p.get("choices") and len(p.get("choices")) >= 2]
-        if not valid:
-            return
-        pregunta = random.choice(valid)
-        qtext = pregunta.get("question")
-        options = pregunta.get("choices")
-        correct = int(pregunta.get("answer", 0))
-        bot = context.bot
-        async def _send():
-            try:
-                intro = await bot.send_message(chat_id=chat_id, text="Trivia automática — ¡El primero que acierte gana! (5 minutos)")
-                poll_msg = await bot.send_poll(
-                    chat_id=chat_id,
-                    question=qtext,
-                    options=options,
-                    type="quiz",
-                    correct_option_id=correct,
-                    is_anonymous=False,
-                    open_period=300,
-                )
-                poll = poll_msg.poll
-                poll_id = poll.id
-                state = load_trivia_state()
-                state[str(poll_id)] = {
-                    "chat_id": chat_id,
-                    "message_id_intro": intro.message_id,
-                    "message_id_poll": poll_msg.message_id,
-                    "question_id": int(pregunta.get("id", 0)),
-                    "started_at": datetime.utcnow().isoformat(),
-                    "finished": False,
-                    "winner": None,
-                    "answers": {},
-                    "question_snapshot": {"question": qtext, "choices": options, "answer": correct},
-                }
-                save_trivia_state(state)
-            except Exception:
-                logging.exception("Error enviando trivia automática")
-        try:
-            asyncio.create_task(_send())
-        except Exception:
-            pass
-    except Exception:
-        logging.exception("Error en run_trivia_for_chat_sync")
-
-async def scheduled_trivia_job(context: ContextTypes.DEFAULT_TYPE):
-    try:
-        roster = load_roster()
-        for chat_key in list(roster.keys()):
-            try:
-                chat_id = int(chat_key)
-            except Exception:
-                continue
-            cfg = _with_defaults(get_chat_settings(chat_id))
-            if not cfg.get("trivia_enabled", DEFAULTS.get("trivia_enabled", False)):
-                continue
-            _run_trivia_for_chat_sync(context, chat_id)
-    except Exception:
-        logging.exception("Error en scheduled_trivia_job")
-
-register_command("trivia_import", "(admins) importar preguntas desde URL (merge/replace)", admin=True)
-register_command("trivia_start", "(admins) iniciar trivia ahora", admin=True)
-register_command("trivia_stop", "(admins) detener la ronda activa", admin=True)
-
-
-# =========================
 # MAIN
+
+
+
+# Added inside main via dynamic injection
+
 def main():
-    _ensure_trivia_files()
+    app = ApplicationBuilder().token(TOKEN).build()
     ensure_import_once()
 
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    # START / HELP / CONFIG
+    # START / HELP / HALLOWEEN
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("config", config_cmd))
     app.add_handler(CallbackQueryHandler(callback_show_help, pattern=r"^show_help$"))
     app.add_handler(CallbackQueryHandler(hub_router, pattern=r"^hub:"))
     app.add_handler(CallbackQueryHandler(cfg_callback, pattern=r"^cfg:"))
+    app.add_handler(CommandHandler("halloween", halloween_cmd))
 
     # AFK
     app.add_handler(CommandHandler("afk", afk_cmd))
@@ -2078,14 +1994,6 @@ def main():
     # TIKTOK DOWNLOADER
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tiktok_detector), group=1)
 
-    # TRIVIA handlers
-    app.add_handler(CommandHandler("trivia_import", trivia_import_cmd))
-    app.add_handler(CallbackQueryHandler(callback_trivia_import_confirm, pattern=r"^triviaimport:"))
-    app.add_handler(CommandHandler("trivia_start", trivia_start_cmd))
-    app.add_handler(CommandHandler("trivia_stop", trivia_stop_cmd))
-    app.add_handler(PollAnswerHandler(poll_answer_handler))
-    app.add_handler(PollHandler(poll_update_handler))
-
     # CATCH-ALL
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message), group=50)
 
@@ -2093,6 +2001,7 @@ def main():
     register_command("start", "muestra el mensaje de bienvenida del bot")
     register_command("help", "lista los comandos disponibles")
     register_command("config", "abrir panel de configuración del chat", admin=True)
+    register_command("halloween", "activa o desactiva el modo halloween (on/off/status)", admin=True)
     register_command("afk", "activa el modo afk con un motivo opcional")
     register_command("autoresponder", "activa una respuesta automática para un usuario", admin=True)
     register_command("autoresponder_off", "desactiva el autoresponder de un usuario", admin=True)
@@ -2103,19 +2012,6 @@ def main():
     register_command("ttt", "inicia una partida de tres en raya (responde a alguien o usa @usuario opcionalmente)")
     register_command("tres", "alias de /ttt para iniciar tres en raya")
     register_command("top_ttt", "muestra el ranking de tres en raya (wins/draws/losses)")
-    register_command("trivia_import", "(admins) importar preguntas desde URL (merge/replace)", admin=True)
-    register_command("trivia_start", "(admins) iniciar trivia ahora", admin=True)
-    register_command("trivia_stop", "(admins) detener la ronda activa", admin=True)
-
-    # Programar job de trivia automática: cada hora, primero ejecución en próxima :30 UTC
-    now = datetime.utcnow()
-    first = now.replace(minute=30, second=0, microsecond=0)
-    if first <= now:
-        first = first + timedelta(hours=1)
-    try:
-        app.job_queue.run_repeating(scheduled_trivia_job, interval=3600, first=first)
-    except Exception:
-        logging.exception("No se pudo programar job_queue para trivia automática")
 
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
@@ -2123,3 +2019,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
