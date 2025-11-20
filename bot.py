@@ -1694,7 +1694,7 @@ HUB_MODULES = {
     "admin": {"title": "@admin", "desc": "Avisa solo al equipo de administradores.", "cmds": ["@admin [motivo]"]},
     "autoresp": {"title": "Autoresponder", "desc": "Respuestas automáticas personalizadas por usuario.", "cmds": ["autoresponder", "autoresponder_off"]},
     "ttt": {"title": "Tres en raya", "desc": "Juega partidas de TTT con el grupo y consulta clasificaciones.", "cmds": ["ttt", "top_ttt"]},
-    "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_import"]},
+    "trivia": {"title": "Trivia", "desc": "Gestión de preguntas de trivia con importación y estadísticas.", "cmds": ["trivia_import"]},
     "namechg": {"title": "SangMata", "desc": "Notifica cambios de nombre y @ cuando la persona habla en el grupo.", "cmds": []},
 }
 
@@ -1819,7 +1819,7 @@ def save_trivia_pool(pool: dict) -> None:
         logging.exception("Error saving trivia pool")
 
 def backup_trivia_pool() -> str | None:
-    """Crea un backup del pool con timestamp y lo guarda en /data/backups/"""
+    """Crea un backup del pool con timestamp y lo guarda en PERSIST_DIR/backups/"""
     if not os.path.exists(TRIVIA_POOL_FILE):
         return None
     try:
@@ -2024,7 +2024,6 @@ async def trivia_import_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pool["questions"] = []
     
     # Agregar nuevas preguntas
-    initial_count = len(pool["questions"])
     pool["questions"].extend(valid_questions)
     save_trivia_pool(pool)
     
