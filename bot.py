@@ -389,7 +389,7 @@ def ensure_import_once():
 
 
 # =========================
-# TEXTOS (NORMAL vs HALLOWEEN)
+# TEXTOS
 AFK_PHRASES_NORMAL = [
     "💤 {first} se ha puesto en modo AFK.",
     "📴 {first} está AFK. Deja tu recado.",
@@ -527,7 +527,7 @@ def txt_hora_line(flag: str, country: str, hhmmss: str) -> str:
 
 
 # =========================
-# START / HELP / HALLOWEEN
+# START / HELP
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
