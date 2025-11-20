@@ -98,9 +98,7 @@ def set_chat_setting(cid: int, key: str, value: Any) -> None:
     s[ckey][key] = value
     save_settings(s)
 
-def is_spooky(cid: int) -> bool:
-    cfg = get_chat_settings(cid)
-    return bool(cfg.get("halloween", False))
+
 
 
 # =========================
@@ -391,7 +389,7 @@ def ensure_import_once():
 
 
 # =========================
-# TEXTOS (NORMAL vs HALLOWEEN)
+# TEXTOS
 AFK_PHRASES_NORMAL = [
     "💤 {first} se ha puesto en modo AFK.",
     "📴 {first} está AFK. Deja tu recado.",
@@ -418,213 +416,118 @@ AFK_RETURN_NORMAL = [
     "🐾 {first} ha encontrado el camino de regreso.",
     "🎊 {first} ha regresado triunfalmente."
 ]
-AFK_PHRASES_SPOOKY = [
-    "🎃 {first} se ha desvanecido entre la niebla… (AFK)",
-    "🕯️ {first} ha cruzado al reino de las sombras (AFK). Deja tu ofrenda.",
-    "🦇 {first} abandona el plano mortal un momento (AFK).",
-    "🕸️ {first} ha quedado atrapado en una telaraña maldita.",
-    "🧙‍♂️ {first} ha sido invocado a otra dimensión.",
-    "☠️ {first} está realizando un ritual prohibido.",
-    "⚰️ {first} descansa en su ataúd temporalmente.",
-    "👁️‍🗨️ {first} fue reclamado por las tinieblas.",
-    "🌑 {first} camina bajo la luna llena (modo AFK).",
-    "🪦 {first} yace entre susurros del más allá."
-]
-AFK_RETURN_SPOOKY = [
-    "🧛‍♂️ {first} ha salido del ataúd. ¡Ha vuelto!",
-    "👻 {first} regresa desde el más allá.",
-    "🕸️ {first} ha roto el hechizo y está de vuelta.",
-    "⚡ {first} ha resucitado con un trueno.",
-    "🪞 {first} cruzó el espejo y volvió al chat.",
-    "🕯️ {first} ha regresado con una nueva maldición.",
-    "🪶 {first} vuelve dejando un rastro de plumas oscuras.",
-    "💀 {first} ha escapado del inframundo.",
-    "🌘 {first} regresó cuando la luna lo permitió.",
-    "🔮 {first} reaparece entre humo y susurros."
-]
+def choose_afk_phrase() -> str:
+    return random.choice(AFK_PHRASES_NORMAL)
 
-def choose_afk_phrase(chat_id: int) -> str:
-    return random.choice(AFK_PHRASES_SPOOKY if is_spooky(chat_id) else AFK_PHRASES_NORMAL)
+def choose_return_phrase() -> str:
+    return random.choice(AFK_RETURN_NORMAL)
 
-def choose_return_phrase(chat_id: int) -> str:
-    return random.choice(AFK_RETURN_SPOOKY if is_spooky(chat_id) else AFK_RETURN_NORMAL)
-
-def txt_start_private(spooky: bool) -> str:
-    if spooky:
-        return ("🎃 ¡Bienvenido a la mansión de RuruBot! 🐸\n"
-                "Gestiono grupos con AFK espectral, autoresponders embrujados y rituales @all/@admin.\n\n"
-                "Pulsa para ver los conjuros disponibles:")
-    return ("¡Hola! Soy RuruBot 🐸\n"
-            "Gestiono grupos con AFK, autoresponder, @all/@admin y más.\n\n"
-            "Pulsa el botón para ver los comandos disponibles.")
-
-def txt_start_group(spooky: bool) -> str:
-    return ("🐸👻 RuruBot ronda por este grupo. Usa /help para conocer sus artes oscuras."
-            if spooky else
-            "🐸 RuruBot activo en este grupo. Usa /help para ver qué puedo hacer.")
-
-def txt_help_triggers(spooky: bool) -> str:
-    if spooky:
-        return ("\n\nAtajos sin barra (informativo):\n"
-                "brb / afk — activa afk (desapareces entre la niebla)\n"
-                "hora [país] — hora del país (por defecto España)\n"
-                "🛡️ @all [motivo] — invocar a todas las almas\n"
-                "@admin [motivo] — llamar al aquelarre de administradores")
+def txt_help_triggers() -> str:
     return ("\n\nAtajos sin barra (informativo):\n            "
             "brb / afk — activa afk\n"
             "hora [país] — hora del país (por defecto España)\n"
             "🛡️ @all [motivo] — mencionar a todos\n"
             "@admin [motivo] — avisar solo a administradores")
 
-def txt_all_perm(spooky: bool) -> str:
-    return ("⛔ Solo los guardianes (administradores) pueden invocar @all."
-            if spooky else
-            "Solo los administradores pueden usar @all.")
+def txt_all_perm() -> str:
+    return "Solo los administradores pueden usar @all."
 
-def txt_all_disabled(spooky: bool) -> str:
-    return ("🕸️ El ritual @all está sellado en este aquelarre."
-            if spooky else
-            "La función @all está desactivada en este grupo.")
+def txt_all_disabled() -> str:
+    return "La función @all está desactivada en este grupo."
 
-def txt_all_cooldown(spooky: bool) -> str:
-    return ("⏳ El círculo aún está caliente. Espera antes de invocar @all de nuevo."
-            if spooky else
-            "Debes esperar antes de volver a usar @all.")
+def txt_all_cooldown() -> str:
+    return "Debes esperar antes de volver a usar @all."
 
-def txt_all_header(spooky: bool, by_first: str, extra: str) -> str:
-    base = ("👻 @all invocado por " if spooky else "@all por ")
-    out = f"{base}{by_first}"
+def txt_all_header(by_first: str, extra: str) -> str:
+    out = f"@all por {by_first}"
     if extra:
         out += f": {extra}"
     return out
 
-def txt_motivo_label(spooky: bool) -> str:
-    return ("🎃 <b>Motivo embrujado:</b> " if spooky else "<b>Motivo:</b> ")
+def txt_motivo_label() -> str:
+    return "<b>Motivo:</b> "
 
-def txt_no_users(spooky: bool) -> str:
-    return ("🕳️ No detecto almas que invocar aquí."
-            if spooky else
-            "No tengo lista de usuarios para mencionar aquí.")
+def txt_no_users() -> str:
+    return "No tengo lista de usuarios para mencionar aquí."
 
-def txt_no_targets(spooky: bool) -> str:
-    return ("🕳️ No hay a quién invocar."
-            if spooky else
-            "No hay a quién mencionar.")
+def txt_no_targets() -> str:
+    return "No hay a quién mencionar."
 
-def txt_all_confirm(spooky: bool) -> str:
-    return ("🔮 ¿Invocar a todas las almas del chat?"
-            if spooky else
-            "¿Quieres mencionar a todos los usuarios?")
+def txt_all_confirm() -> str:
+    return "¿Quieres mencionar a todos los usuarios?"
 
-def btn_confirm(spooky: bool) -> str:
-    return "☠️ Confirmar" if spooky else "Confirmar"
+def btn_confirm() -> str:
+    return "Confirmar"
 
-def btn_cancel(spooky: bool) -> str:
-    return "🕸️ Cancelar" if spooky else "Cancelar"
+def btn_cancel() -> str:
+    return "Cancelar"
 
-def txt_all_confirm_bad(spooky: bool) -> str:
-    return ("⚠️ El ritual de confirmación ha fallado."
-            if spooky else
-            "Confirmación inválida.")
+def txt_all_confirm_bad() -> str:
+    return "Confirmación inválida."
 
-def txt_only_initiator(spooky: bool) -> str:
-    return ("🪄 Solo quien invocó el ritual puede confirmarlo."
-            if spooky else
-            "Solo puede confirmar quien inició la acción.")
+def txt_only_initiator() -> str:
+    return "Solo puede confirmar quien inició la acción."
 
-def txt_sending_mentions(spooky: bool) -> str:
-    return ("🔔 Abriendo el portal de menciones…"
-            if spooky else
-            "Enviando menciones…")
+def txt_sending_mentions() -> str:
+    return "Enviando menciones…"
 
-def txt_canceled(spooky: bool) -> str:
-    return ("❌ Ritual cancelado." if spooky else "Cancelado.")
+def txt_canceled() -> str:
+    return "Cancelado."
 
-def txt_cancel_cmd(spooky: bool) -> str:
-    return ("❌ Los espíritus han sido dispersados. (Acción cancelada)"
-            if spooky else
-            "Cancelado.")
+def txt_cancel_cmd() -> str:
+    return "Cancelado."
 
-def txt_admin_disabled(spooky: bool) -> str:
-    return ("🧷 El conjuro @admin está sellado en este círculo."
-            if spooky else
-            "La función @admin está desactivada en este grupo.")
+def txt_admin_disabled() -> str:
+    return "La función @admin está desactivada en este grupo."
 
-def txt_admin_cooldown(spooky: bool) -> str:
-    return ("⏳ El aquelarre necesita recuperar poder. Espera un poco."
-            if spooky else
-            "Debes esperar antes de volver a usar @admin.")
+def txt_admin_cooldown() -> str:
+    return "Debes esperar antes de volver a usar @admin."
 
-def txt_admin_header(spooky: bool, by_first: str, extra: str) -> str:
-    base = ("🦇 @admin invocado por " if spooky else "@admin por ")
-    out = f"{base}{by_first}"
+def txt_admin_header(by_first: str, extra: str) -> str:
+    out = f"@admin por {by_first}"
     if extra:
         out += f": {extra}"
     return out
 
-def txt_no_admins(spooky: bool) -> str:
-    return ("🕯️ No encuentro hechiceros (administradores) en este círculo."
-            if spooky else
-            "No encuentro administradores para mencionar aquí.")
+def txt_no_admins() -> str:
+    return "No encuentro administradores para mencionar aquí."
 
-def txt_admin_confirm(spooky: bool) -> str:
-    return ("🪄 ¿Avisar al aquelarre de administradores?"
-            if spooky else
-            "¿Quieres avisar a los administradores?")
+def txt_admin_confirm() -> str:
+    return "¿Quieres avisar a los administradores?"
 
-def txt_calling_admins(spooky: bool) -> str:
-    return ("🔔 Llamando al aquelarre…"
-            if spooky else
-            "Avisando a administradores…")
+def txt_calling_admins() -> str:
+    return "Avisando a administradores…"
 
-def txt_autoresp_usage(spooky: bool) -> str:
-    return ("📜 Uso: /autoresponder @usuario <texto del conjuro> — o responde a un mensaje con /autoresponder <texto>"
-            if spooky else
-            "Uso: /autoresponder @usuario <texto> — o responde a un mensaje con /autoresponder <texto>")
+def txt_autoresp_usage() -> str:
+    return "Uso: /autoresponder @usuario <texto> — o responde a un mensaje con /autoresponder <texto>"
 
-def txt_autoresp_reply_usage(spooky: bool) -> str:
-    return ("📜 Uso: responde a un mensaje con /autoresponder <texto del conjuro>"
-            if spooky else
-            "Uso: /autoresponder <texto>")
+def txt_autoresp_reply_usage() -> str:
+    return "Uso: /autoresponder <texto>"
 
-def txt_autoresp_not_found(spooky: bool) -> str:
-    return ("🕸️ No he encontrado a esa alma en este círculo."
-            if spooky else
-            "No se ha podido identificar al usuario.")
+def txt_autoresp_not_found() -> str:
+    return "No se ha podido identificar al usuario."
 
-def txt_autoresp_on(spooky: bool, first: str, text: str) -> str:
-    return (f"✅ He grabado un hechizo de respuesta automática para {first}. Responderé con: “{text}”."
-            if spooky else
-            f"✅ Autoresponder activado para {first}. Responderé con: “{text}”.")
+def txt_autoresp_on(first: str, text: str) -> str:
+    return f"✅ Autoresponder activado para {first}. Responderé con: \"{text}\"."
 
-def txt_autoresp_off_usage(spooky: bool) -> str:
-    return ("📜 Uso: /autoresponder_off @usuario — o responde a su mensaje."
-            if spooky else
-            "Uso: /autoresponder_off @usuario — o responde a su mensaje.")
+def txt_autoresp_off_usage() -> str:
+    return "Uso: /autoresponder_off @usuario — o responde a su mensaje."
 
-def txt_autoresp_off(spooky: bool, first: str) -> str:
-    return ("❌ He disipado el hechizo de {first}.".format(first=first)
-            if spooky else
-            f"❌ Autoresponder desactivado para {first}.")
+def txt_autoresp_off(first: str) -> str:
+    return f"❌ Autoresponder desactivado para {first}."
 
-def txt_autoresp_none(spooky: bool, first: str) -> str:
-    return ("🔮 {first} no tenía ningún conjuro activo.".format(first=first)
-            if spooky else
-            f"{first} no tenía autoresponder activo.")
+def txt_autoresp_none(first: str) -> str:
+    return f"{first} no tenía autoresponder activo."
 
-def txt_hora_unknown(spooky: bool) -> str:
-    return ("🕰️ No reconozco ese reino. Ejemplos: /hora, /hora México, /hora Reino Unido"
-            if spooky else
-            "No reconozco ese país. Ejemplos: /hora, /hora México, /hora Reino Unido")
+def txt_hora_unknown() -> str:
+    return "No reconozco ese país. Ejemplos: /hora, /hora México, /hora Reino Unido"
 
-def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
-    if spooky:
-        return f"🕰️ En {flag} {country} son las {hhmmss}. (resuenan campanas a lo lejos)"
+def txt_hora_line(flag: str, country: str, hhmmss: str) -> str:
     return f"En {flag} {country} son las {hhmmss}."
 
 
 # =========================
-# START / HELP / HALLOWEEN
+# START / HELP
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -667,14 +570,11 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat = msg.chat
-    spooky = is_spooky(chat.id)
 
     # En grupos: redirigir a privado con botón y autodestrucción
     if chat.type != ChatType.PRIVATE:
         username = await _bot_username(context)
-        text = ("🎯 Contáctame en privado para ver la ayuda completa."
-                if spooky else
-                "📬 Contáctame en privado para ver la ayuda completa.")
+        text = "📬 Contáctame en privado para ver la ayuda completa."
         url = f"https://t.me/{username}?start=help"
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
         m = await msg.reply_text(text, reply_markup=kb, disable_web_page_preview=True)
@@ -691,7 +591,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # En privado: ayuda completa (formato elegante)
-    header = "🎃 <b>Hechizos disponibles</b>\n" if spooky else "🐸 <b>Comandos disponibles</b>\n"
+    header = "🐸 <b>Comandos disponibles</b>\n"
     desc = (
         "<i>Usa los comandos con / y algunos atajos sin barra como</i> "
         "<code>afk</code>, <code>hora México</code> o <code>@all</code>.\n\n"
@@ -702,7 +602,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_tag = "🛡️ " if info.get("admin") else "• "
         lines.append(f"{admin_tag}<b>/{name}</b> — {html.escape(info.get('desc'))}")
 
-    text = header + desc + "\n".join(lines) + txt_help_triggers(spooky)
+    text = header + desc + "\n".join(lines) + txt_help_triggers()
     await msg.reply_text(text, parse_mode="HTML", disable_web_page_preview=True)
 
 async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -711,23 +611,7 @@ async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE)
     fake_update = Update(update.update_id, message=q.message)
     await help_cmd(fake_update, context)
 
-async def halloween_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    chat = msg.chat
-    if not context.args:
-        cur = "ON" if is_spooky(chat.id) else "OFF"
-        return await msg.reply_text(f"🎃 Estado de Halloween: {cur}")
-    arg = context.args[0].lower()
-    if arg in ("on", "true", "1", "si", "sí"):
-        set_chat_setting(chat.id, "halloween", True)
-        return await msg.reply_text("🎃 Modo Halloween ACTIVADO. Que comience el aquelarre.")
-    if arg in ("off", "false", "0", "no"):
-        set_chat_setting(chat.id, "halloween", False)
-        return await msg.reply_text("🟢 Modo Halloween DESACTIVADO. Volvemos al mundo mortal.")
-    if arg in ("status", "estado"):
-        cur = "ON" if is_spooky(chat.id) else "OFF"
-        return await msg.reply_text(f"🎃 Estado de Halloween: {cur}")
-    await msg.reply_text("Uso: /halloween on | off | status")
+
 
 
 # =========================
@@ -743,9 +627,9 @@ async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reason = " ".join(context.args) if context.args else None
     AFK_USERS[user.id] = {"since": time.time(), "reason": reason, "username": (user.username or "").lower(), "first_name": user.first_name}
-    phrase = choose_afk_phrase(chat.id).format(first=user.first_name)
+    phrase = choose_afk_phrase().format(first=user.first_name)
     if reason:
-        phrase += (" 🕯️ Motivo: " if is_spooky(chat.id) else " Motivo: ") + reason
+        phrase += " Motivo: " + reason
     await msg.reply_text(phrase)
 
 async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -775,7 +659,6 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
     if not is_module_enabled(msg.chat.id, "afk_enabled"):
         return
 
-    spooky = is_spooky(msg.chat.id)
     if msg.reply_to_message and msg.reply_to_message.from_user:
         target = msg.reply_to_message.from_user
         if target.id in AFK_USERS:
@@ -783,10 +666,9 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
             since = data.get("since")
             reason = data.get("reason")
             dur = format_duration(time.time() - since)
-            base = "💤👻 " if spooky else "💤 "
-            txt = f"{base}{target.first_name} está AFK desde {dur}."
+            txt = f"💤 {target.first_name} está AFK desde {dur}."
             if reason:
-                txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
+                txt += " Motivo: " + reason
             await msg.reply_text(txt)
     if not msg.entities:
         return
@@ -801,10 +683,9 @@ async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT
                 since = info.get("since")
                 reason = info.get("reason")
                 dur = format_duration(time.time() - since)
-                base = "💤👻 " if spooky else "💤 "
-                txt = f"{base}{first} está AFK desde {dur}."
+                txt = f"💤 {first} está AFK desde {dur}."
                 if reason:
-                    txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
+                    txt += " Motivo: " + reason
                 await msg.reply_text(txt)
 
 
@@ -816,7 +697,6 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
-    spooky = is_spooky(chat.id)
 
     target_user = None
     response_text = None
@@ -825,11 +705,11 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_user = msg.reply_to_message.from_user
         response_text = " ".join(context.args).strip()
         if not response_text:
-            await msg.reply_text(txt_autoresp_reply_usage(spooky))
+            await msg.reply_text(txt_autoresp_reply_usage())
             return
     else:
         if len(context.args) < 2:
-            await msg.reply_text(txt_autoresp_usage(spooky))
+            await msg.reply_text(txt_autoresp_usage())
             return
         mention = context.args[0]
         response_text = " ".join(context.args[1:]).strip()
@@ -845,7 +725,7 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 uid = int(uid_str)
                 break
         if uid is None:
-            await msg.reply_text(txt_autoresp_not_found(spooky))
+            await msg.reply_text(txt_autoresp_not_found())
             return
         member = await context.bot.get_chat_member(chat.id, uid)
         target_user = member.user
@@ -853,7 +733,7 @@ async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat.id not in AUTO_RESPONDERS:
         AUTO_RESPONDERS[chat.id] = {}
     AUTO_RESPONDERS[chat.id][target_user.id] = response_text
-    await msg.reply_text(txt_autoresp_on(spooky, target_user.first_name, response_text))
+    await msg.reply_text(txt_autoresp_on(target_user.first_name, response_text))
 
 async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -861,7 +741,6 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
     chat = msg.chat
-    spooky = is_spooky(chat.id)
     target_user = None
 
     if msg.reply_to_message:
@@ -876,19 +755,19 @@ async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TY
                 uid = int(uid_str)
                 break
         if uid is None:
-            return await msg.reply_text(txt_autoresp_not_found(spooky))
+            return await msg.reply_text(txt_autoresp_not_found())
         member = await context.bot.get_chat_member(chat.id, uid)
         target_user = member.user
 
     if not target_user:
-        await msg.reply_text(txt_autoresp_off_usage(spooky))
+        await msg.reply_text(txt_autoresp_off_usage())
         return
 
     if chat.id in AUTO_RESPONDERS and target_user.id in AUTO_RESPONDERS[chat.id]:
         del AUTO_RESPONDERS[chat.id][target_user.id]
-        await msg.reply_text(txt_autoresp_off(spooky, target_user.first_name))
+        await msg.reply_text(txt_autoresp_off(target_user.first_name))
     else:
-        await msg.reply_text(txt_autoresp_none(spooky, target_user.first_name))
+        await msg.reply_text(txt_autoresp_none(target_user.first_name))
 
 
 # =========================
@@ -942,69 +821,65 @@ def format_time_in_tz(tz: str) -> str:
 
 async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    spooky = is_spooky(msg.chat.id)
     query = " ".join(context.args).strip() if context.args else None
     resolved = resolve_country_to_iso2_and_name(query)
     if not resolved:
-        return await msg.reply_text(txt_hora_unknown(spooky))
+        return await msg.reply_text(txt_hora_unknown())
     iso2, country_name = resolved
     tz = pick_timezone_for_country(iso2)
     flag = flag_emoji(iso2)
     hhmmss = format_time_in_tz(tz)
-    await msg.reply_text(txt_hora_line(spooky, flag, country_name, hhmmss))
+    await msg.reply_text(txt_hora_line(flag, country_name, hhmmss))
 
 async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text:
         return
-    spooky = is_spooky(msg.chat.id)
     m = re.match(r"(?is)^\s*hora\b(.*)$", msg.text.strip())
     if not m:
         return
     query = m.group(1).strip() or None
     resolved = resolve_country_to_iso2_and_name(query)
     if not resolved:
-        return await msg.reply_text(txt_hora_unknown(spooky))
+        return await msg.reply_text(txt_hora_unknown())
     iso2, country_name = resolved
     tz = pick_timezone_for_country(iso2)
     flag = flag_emoji(iso2)
     hhmmss = format_time_in_tz(tz)
-    await msg.reply_text(txt_hora_line(spooky, flag, country_name, hhmmss))
+    await msg.reply_text(txt_hora_line(flag, country_name, hhmmss))
 
 
 # =========================
 # @ALL
 async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[bool, str]:
-    spooky = is_spooky(chat_id)
     if not await is_admin(context, chat_id, user_id):
-        return False, txt_all_perm(spooky)
+        return False, txt_all_perm()
     cfg = get_chat_settings(chat_id)
     if not cfg.get("all_enabled", True):
-        return False, txt_all_disabled(spooky)
+        return False, txt_all_disabled()
     cd = cfg.get("all_cooldown_sec", 60)
     if _last_all.get(chat_id) and time.time() - _last_all[chat_id] < cd:
-        return False, txt_all_cooldown(spooky)
+        return False, txt_all_cooldown()
     return True, ""
 
 async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
-    spooky = is_spooky(chat.id)
     await prune_roster(chat.id, context)
     members = get_chat_roster(chat.id)
     if not members:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_users(spooky))
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_users())
         return
     parts = build_mentions_html(members)
     if not parts:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets(spooky))
+        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets())
         return
 
-    header = txt_all_header(spooky, by_user.first_name, extra)
+    header = txt_all_header(by_user.first_name, extra)
     try:
         await context.bot.send_message(chat_id=chat.id, text=header)
     except Exception as e:
         logging.exception("Fallo cabecera @all", exc_info=e)
 
-    motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
+    motivo_html = ("\n\n" + txt_motivo_label() + html.escape(extra)) if extra else ""
     for block in parts:
         try:
             body = block + motivo_html
@@ -1015,46 +890,43 @@ async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_u
     _last_all[chat.id] = time.time()
 
 async def confirm_all(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
-    spooky = is_spooky(chat_id)
     data_yes = f"allconfirm:{chat_id}:yes:{initiator_id}"
     data_no = f"allconfirm:{chat_id}:no:{initiator_id}"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
+        [InlineKeyboardButton(btn_confirm(), callback_data=data_yes),
+         InlineKeyboardButton(btn_cancel(), callback_data=data_no)]
     ])
 
 async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     chat_id = q.message.chat.id
-    spooky = is_spooky(chat_id)
     await safe_q_answer(q)
     try:
         _, cid, action, initiator = q.data.split(":")
         cid = int(cid)
         initiator = int(initiator)
     except Exception:
-        return await q.edit_message_text(txt_all_confirm_bad(spooky))
+        return await q.edit_message_text(txt_all_confirm_bad())
     if q.from_user.id != initiator:
-        return await q.reply_text(txt_only_initiator(spooky))
+        return await q.reply_text(txt_only_initiator())
     if action == "yes":
         extra = context.user_data.get("pending_all", "")
-        await q.edit_message_text(txt_sending_mentions(spooky))
+        await q.edit_message_text(txt_sending_mentions())
         chat = await context.bot.get_chat(cid)
         await execute_all(chat, context, extra, q.from_user)
         context.user_data.pop("pending_all", None)
     else:
         context.user_data.pop("pending_all", None)
-        await q.edit_message_text(txt_canceled(spooky))
+        await q.edit_message_text(txt_canceled())
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     # SOLO ADMIN
     if not await is_admin(context, msg.chat.id, msg.from_user.id):
         return await msg.reply_text("Este comando es solo para administradores.")
-    spooky = is_spooky(msg.chat.id)
     context.user_data.pop("pending_all", None)
     context.user_data.pop("pending_admin", None)
-    await msg.reply_text(txt_cancel_cmd(spooky))
+    await msg.reply_text(txt_cancel_cmd())
 
 async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -1068,7 +940,7 @@ async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = get_chat_settings(chat.id)
     if cfg.get("all_confirm", True):
         kb = await confirm_all(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_all_confirm(is_spooky(chat.id)), reply_markup=kb)
+        await msg.reply_text(txt_all_confirm(), reply_markup=kb)
         context.user_data["pending_all"] = extra
         return
     await execute_all(chat, context, extra, user)
@@ -1089,7 +961,7 @@ async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = get_chat_settings(chat.id)
     if cfg.get("all_confirm", True):
         kb = await confirm_all(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_all_confirm(is_spooky(chat.id)), reply_markup=kb)
+        await msg.reply_text(txt_all_confirm(), reply_markup=kb)
         context.user_data["pending_all"] = extra
         return
     await execute_all(chat, context, extra, user)
@@ -1098,13 +970,12 @@ async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 # @ADMIN
 async def _check_admin_ping_permissions(context, chat_id: int) -> tuple[bool, str]:
-    spooky = is_spooky(chat_id)
     cfg = get_chat_settings(chat_id)
     if not cfg.get("admin_enabled", True):
-        return False, txt_admin_disabled(spooky)
+        return False, txt_admin_disabled()
     cd = cfg.get("admin_cooldown_sec", 60)
     if _admin_last.get(chat_id) and time.time() - _admin_last[chat_id] < cd:
-        return False, txt_admin_cooldown(spooky)
+        return False, txt_admin_cooldown()
     return True, ""
 
 async def _get_admin_members(chat, context: ContextTypes.DEFAULT_TYPE) -> List[dict]:
@@ -1138,18 +1009,17 @@ def _build_mentions_html_from_basic(members: List[dict]) -> List[str]:
     return chunks
 
 async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
-    spooky = is_spooky(chat.id)
-    await prune_roster(chat.id, context)  # <-- Pega aquí esta línea
+    await prune_roster(chat.id, context)
     admins = await _get_admin_members(chat, context)
     if not admins:
-        return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins(spooky))
+        return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins())
     parts = _build_mentions_html_from_basic(admins)
-    header = txt_admin_header(spooky, by_user.first_name, extra)
+    header = txt_admin_header(by_user.first_name, extra)
     try:
         await context.bot.send_message(chat_id=chat.id, text=header)
     except Exception:
         logging.exception("Fallo cabecera @admin")
-    motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
+    motivo_html = ("\n\n" + txt_motivo_label() + html.escape(extra)) if extra else ""
     for block in parts:
         try:
             body = block + motivo_html
@@ -1160,36 +1030,34 @@ async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by
     _admin_last[chat.id] = time.time()
 
 async def confirm_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
-    spooky = is_spooky(chat_id)
     data_yes = f"adminconfirm:{chat_id}:yes:{initiator_id}"
     data_no = f"adminconfirm:{chat_id}:no:{initiator_id}"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
+        [InlineKeyboardButton(btn_confirm(), callback_data=data_yes),
+         InlineKeyboardButton(btn_cancel(), callback_data=data_no)]
     ])
 
 async def callback_adminconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     chat_id = q.message.chat.id
-    spooky = is_spooky(chat_id)
     await safe_q_answer(q)
     try:
         _, cid, action, initiator = q.data.split(":")
         cid = int(cid)
         initiator = int(initiator)
     except Exception:
-        return await q.edit_message_text(txt_all_confirm_bad(spooky))
+        return await q.edit_message_text(txt_all_confirm_bad())
     if q.from_user.id != initiator:
-        return await q.reply_text(txt_only_initiator(spooky))
+        return await q.reply_text(txt_only_initiator())
     if action == "yes":
         extra = context.user_data.get("pending_admin", "")
-        await q.edit_message_text(txt_calling_admins(spooky))
+        await q.edit_message_text(txt_calling_admins())
         chat = await context.bot.get_chat(cid)
         await execute_admin(chat, context, extra, q.from_user)
         context.user_data.pop("pending_admin", None)
     else:
         context.user_data.pop("pending_admin", None)
-        await q.edit_message_text(txt_canceled(spooky))
+        await q.edit_message_text(txt_canceled())
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -1202,7 +1070,7 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = get_chat_settings(chat.id)
     if cfg.get("admin_confirm", True):
         kb = await confirm_admin(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_admin_confirm(is_spooky(chat.id)), reply_markup=kb)
+        await msg.reply_text(txt_admin_confirm(), reply_markup=kb)
         context.user_data["pending_admin"] = extra
         return
     await execute_admin(chat, context, extra, user)
@@ -1223,7 +1091,7 @@ async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_T
     cfg = get_chat_settings(chat.id)
     if cfg.get("admin_confirm", True):
         kb = await confirm_admin(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_admin_confirm(is_spooky(chat.id)), reply_markup=kb)
+        await msg.reply_text(txt_admin_confirm(), reply_markup=kb)
         context.user_data["pending_admin"] = extra
         return
     await execute_admin(chat, context, extra, user)
@@ -1326,20 +1194,19 @@ def _ttt_board_markup(chat_id: int, msg_id: int, board: list[str], playing: bool
         rows.append(btns)
     return InlineKeyboardMarkup(rows)
 
-def _ttt_header_text(spooky: bool, state: Dict[str, Any]) -> str:
+def _ttt_header_text(state: Dict[str, Any]) -> str:
     pX = state["players"].get("X_name", "X")
     pO = state["players"].get("O_name", "O")
     turn = state.get("turn", "X")
     status = state.get("status")
     if status == "waiting":
-        return ("🎃 " if spooky else "") + f"Tres en raya — Esperando oponente…\n{pX} juega con {TTT_X}."
+        return f"Tres en raya — Esperando oponente…\n{pX} juega con {TTT_X}."
     if status == "playing":
-        arrow = "🦇" if spooky else "➡️"
         now = pX if turn == "X" else pO
-        return ("👻 " if spooky else "") + f"Tres en raya — Turno de {now} {arrow}"
+        return f"Tres en raya — Turno de {now} ➡️"
     if status == "ended":
         result = state.get("result", "fin de partida")
-        return ("🕯️ " if spooky else "") + f"Tres en raya — {result}"
+        return f"Tres en raya — {result}"
     return "Tres en raya"
 
 def _ttt_footer_markup(chat_id: int, msg_id: int, state: Dict[str, Any]) -> InlineKeyboardMarkup:
@@ -1376,8 +1243,6 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_module_enabled(chat.id, "ttt_enabled"):
         return await msg.reply_text("El módulo TTT está desactivado en este chat.")
 
-    spooky = is_spooky(chat.id)
-
     pX = msg.from_user
     opponent_id = None
     opponent_name = None
@@ -1412,7 +1277,7 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "created_ts": time.time()
     }
 
-    text = _ttt_header_text(spooky, state)
+    text = _ttt_header_text(state)
 
     # Envia sin teclado para obtener message_id real (evita msg_id=0)
     sent = await context.bot.send_message(chat_id=chat.id, text=text)
@@ -1428,12 +1293,11 @@ async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Ahora sí, añade teclado con msg_id real
     kb = _ttt_footer_markup(chat.id, sent.message_id, state)
-    await sent.edit_text(_ttt_header_text(spooky, state), reply_markup=kb)
+    await sent.edit_text(_ttt_header_text(state), reply_markup=kb)
 
 async def ttt_join_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
     q = update.callback_query
     user = q.from_user
-    spooky = is_spooky(chat_id)
     state = _ttt_get_game(chat_id, msg_id)
     if not state:
         return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
@@ -1451,12 +1315,11 @@ async def ttt_join_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_i
     _ttt_set_game(chat_id, msg_id, state)
 
     await safe_q_answer(q, "¡Partida iniciada!")
-    await q.edit_message_text(_ttt_header_text(spooky, state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
+    await q.edit_message_text(_ttt_header_text(state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
 
 async def ttt_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
     q = update.callback_query
     user = q.from_user
-    spooky = is_spooky(chat_id)
     state = _ttt_get_game(chat_id, msg_id)
     if not state:
         return await safe_q_answer(q, "Nada que cancelar.", show_alert=True)
@@ -1465,12 +1328,11 @@ async def ttt_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat
             return await safe_q_answer(q, "No puedes cancelar esta partida.", show_alert=True)
         _ttt_del_game(chat_id, msg_id)
         await safe_q_answer(q)
-        return await q.edit_message_text("❌ Partida cancelada." if spooky else "❌ Partida cancelada.")
+        return await q.edit_message_text("❌ Partida cancelada.")
     return await safe_q_answer(q, "La partida ya está en curso.", show_alert=True)
 
 async def ttt_rematch_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
     q = update.callback_query
-    spooky = is_spooky(chat_id)
     old = _ttt_get_game(chat_id, msg_id)
     if not old:
         return await safe_q_answer(q, "No hay partida para reiniciar.", show_alert=True)
@@ -1488,12 +1350,11 @@ async def ttt_rematch_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, cha
     }
     _ttt_set_game(chat_id, msg_id, new_state)
     await safe_q_answer(q, "¡Nueva partida!")
-    await q.edit_message_text(_ttt_header_text(spooky, new_state), reply_markup=_ttt_footer_markup(chat_id, msg_id, new_state))
+    await q.edit_message_text(_ttt_header_text(new_state), reply_markup=_ttt_footer_markup(chat_id, msg_id, new_state))
 
 async def ttt_play_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int, idx: int):
     q = update.callback_query
     user = q.from_user
-    spooky = is_spooky(chat_id)
     state = _ttt_get_game(chat_id, msg_id)
     if not state:
         return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
@@ -1539,7 +1400,7 @@ async def ttt_play_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_i
 
     _ttt_set_game(chat_id, msg_id, state)
     await safe_q_answer(q)
-    await q.edit_message_text(_ttt_header_text(spooky, state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
+    await q.edit_message_text(_ttt_header_text(state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
 
 # router callbacks del TTT
 async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1641,9 +1502,9 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_module_enabled(chat.id, "afk_enabled") and user.id in AFK_USERS:
         info = AFK_USERS.pop(user.id)
         since = info.get("since")
-        phrase = choose_return_phrase(chat.id).format(first=user.first_name)
+        phrase = choose_return_phrase().format(first=user.first_name)
         if since:
-            phrase += (" ⏳ (fuera " if is_spooky(chat.id) else " (fuera ") + format_duration(time.time() - since) + ")"
+            phrase += " (fuera " + format_duration(time.time() - since) + ")"
         await msg.reply_text(phrase)
 
     # autoresponder
@@ -1673,7 +1534,6 @@ MODULES: Dict[str, Dict[str, str]] = {
     "ttt": {"key": "ttt_enabled", "label": "TTT"},
     "trivia": {"key": "trivia_enabled", "label": "Trivia"},
     "namechg": {"key": "notify_name_change", "label": "SangMata"},
-    "halloween": {"key": "halloween", "label": "Halloween"},
 }
 
 DEFAULTS: Dict[str, bool] = {
@@ -1684,7 +1544,6 @@ DEFAULTS: Dict[str, bool] = {
     "ttt_enabled": True,
     "trivia_enabled": False,
     "notify_name_change": False,
-    "halloween": False,
 }
 
 
@@ -1850,11 +1709,10 @@ HUB_MODULES = {
     "ttt": {"title": "Tres en raya", "desc": "Juega partidas de TTT con el grupo y consulta clasificaciones.", "cmds": ["ttt", "top_ttt"]},
     "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_on", "trivia_off", "trivia_stats"]},
     "namechg": {"title": "SangMata", "desc": "Notifica cambios de nombre y @ cuando la persona habla en el grupo.", "cmds": []},
-    "halloween": {"title": "Halloween", "desc": "Cambia el tema de los mensajes del bot.", "cmds": ["halloween on|off"]},
 }
 
 def build_hub_keyboard() -> InlineKeyboardMarkup:
-    codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg", "halloween"]
+    codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg"]
     rows = []
     for i in range(0, len(codes), 2):
         chunk = codes[i:i + 2]
@@ -1951,14 +1809,13 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     ensure_import_once()
 
-    # START / HELP / HALLOWEEN
+    # START / HELP / CONFIG
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("config", config_cmd))
     app.add_handler(CallbackQueryHandler(callback_show_help, pattern=r"^show_help$"))
     app.add_handler(CallbackQueryHandler(hub_router, pattern=r"^hub:"))
     app.add_handler(CallbackQueryHandler(cfg_callback, pattern=r"^cfg:"))
-    app.add_handler(CommandHandler("halloween", halloween_cmd))
 
     # AFK
     app.add_handler(CommandHandler("afk", afk_cmd))
@@ -2001,7 +1858,6 @@ def main():
     register_command("start", "muestra el mensaje de bienvenida del bot")
     register_command("help", "lista los comandos disponibles")
     register_command("config", "abrir panel de configuración del chat", admin=True)
-    register_command("halloween", "activa o desactiva el modo halloween (on/off/status)", admin=True)
     register_command("afk", "activa el modo afk con un motivo opcional")
     register_command("autoresponder", "activa una respuesta automática para un usuario", admin=True)
     register_command("autoresponder_off", "desactiva el autoresponder de un usuario", admin=True)
