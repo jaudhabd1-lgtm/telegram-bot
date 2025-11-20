@@ -1437,6 +1437,249 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
+# TRIVIA MODULE
+# =========================
+
+# Trivia file paths
+TRIVIA_POOL_FILE = os.path.join(PERSIST_DIR, "pool.json")
+TRIVIA_BACKUPS_DIR = os.path.join(PERSIST_DIR, "backups")
+TRIVIA_STATE_FILE = os.path.join(PERSIST_DIR, "trivia_state.json")
+TRIVIA_STATS_FILE = os.path.join(PERSIST_DIR, "trivia_stats.json")
+TRIVIA_ADMIN_LOG_FILE = os.path.join(PERSIST_DIR, "trivia_admin_log.json")
+
+def _ensure_trivia_files() -> None:
+    """Ensure all trivia files and directories exist."""
+    try:
+        # Ensure PERSIST_DIR exists
+        os.makedirs(PERSIST_DIR, exist_ok=True)
+        
+        # Ensure backups directory exists
+        os.makedirs(TRIVIA_BACKUPS_DIR, exist_ok=True)
+        
+        # Create pool.json if it doesn't exist
+        if not os.path.exists(TRIVIA_POOL_FILE):
+            with open(TRIVIA_POOL_FILE, "w", encoding="utf-8") as f:
+                json.dump([], f, ensure_ascii=False, indent=2)
+        
+        # Create trivia_state.json if it doesn't exist
+        if not os.path.exists(TRIVIA_STATE_FILE):
+            with open(TRIVIA_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=2)
+        
+        # Create trivia_stats.json if it doesn't exist
+        if not os.path.exists(TRIVIA_STATS_FILE):
+            with open(TRIVIA_STATS_FILE, "w", encoding="utf-8") as f:
+                json.dump({}, f, ensure_ascii=False, indent=2)
+        
+        # Create trivia_admin_log.json if it doesn't exist
+        if not os.path.exists(TRIVIA_ADMIN_LOG_FILE):
+            with open(TRIVIA_ADMIN_LOG_FILE, "w", encoding="utf-8") as f:
+                json.dump([], f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.exception("Error ensuring trivia files", exc_info=e)
+
+def load_pool() -> List[Dict[str, Any]]:
+    """Load the trivia question pool from pool.json."""
+    _ensure_trivia_files()
+    try:
+        with open(TRIVIA_POOL_FILE, "r", encoding="utf-8") as f:
+            pool = json.load(f)
+            if not isinstance(pool, list):
+                logging.warning("pool.json is not a list, returning empty pool")
+                return []
+            return pool
+    except Exception as e:
+        logging.exception("Error loading pool", exc_info=e)
+        return []
+
+def save_pool(pool: List[Dict[str, Any]]) -> None:
+    """Save the trivia question pool to pool.json."""
+    _ensure_trivia_files()
+    try:
+        with open(TRIVIA_POOL_FILE, "w", encoding="utf-8") as f:
+            json.dump(pool, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.exception("Error saving pool", exc_info=e)
+
+def _backup_pool() -> str | None:
+    """Create a timestamped backup of pool.json and return the backup path."""
+    _ensure_trivia_files()
+    try:
+        # Read current pool
+        pool = load_pool()
+        
+        # Create backup filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"pool_backup_{timestamp}.json"
+        backup_path = os.path.join(TRIVIA_BACKUPS_DIR, backup_filename)
+        
+        # Save backup
+        with open(backup_path, "w", encoding="utf-8") as f:
+            json.dump(pool, f, ensure_ascii=False, indent=2)
+        
+        logging.info(f"Pool backed up to {backup_path}")
+        return backup_path
+    except Exception as e:
+        logging.exception("Error creating pool backup", exc_info=e)
+        return None
+
+def _validate_pool_list(pool: List[Dict[str, Any]]) -> tuple[bool, str]:
+    """
+    Validate that the pool list is correctly formatted.
+    Returns (is_valid, error_message).
+    """
+    if not isinstance(pool, list):
+        return False, "Pool must be a list"
+    
+    for idx, question in enumerate(pool):
+        if not isinstance(question, dict):
+            return False, f"Question {idx} is not a dictionary"
+        
+        # Check required fields
+        if "id" not in question:
+            return False, f"Question {idx} missing 'id' field"
+        if "question" not in question:
+            return False, f"Question {idx} missing 'question' field"
+        if "choices" not in question:
+            return False, f"Question {idx} missing 'choices' field"
+        if "answer" not in question:
+            return False, f"Question {idx} missing 'answer' field"
+        
+        # Validate types
+        if not isinstance(question["id"], int):
+            return False, f"Question {idx}: 'id' must be an integer"
+        if not isinstance(question["question"], str):
+            return False, f"Question {idx}: 'question' must be a string"
+        if not isinstance(question["choices"], list):
+            return False, f"Question {idx}: 'choices' must be a list"
+        if not isinstance(question["answer"], int):
+            return False, f"Question {idx}: 'answer' must be an integer"
+        
+        # Validate choices
+        if len(question["choices"]) < 2:
+            return False, f"Question {idx}: must have at least 2 choices"
+        for choice_idx, choice in enumerate(question["choices"]):
+            if not isinstance(choice, str):
+                return False, f"Question {idx}, choice {choice_idx}: must be a string"
+        
+        # Validate answer index
+        if question["answer"] < 0 or question["answer"] >= len(question["choices"]):
+            return False, f"Question {idx}: answer index {question['answer']} out of range (0-{len(question['choices'])-1})"
+    
+    return True, ""
+
+def _log_admin_action(chat_id: int, user_id: int, user_name: str, action: str, details: str = "") -> None:
+    """Log an admin action to trivia_admin_log.json."""
+    _ensure_trivia_files()
+    try:
+        with open(TRIVIA_ADMIN_LOG_FILE, "r", encoding="utf-8") as f:
+            log = json.load(f)
+            if not isinstance(log, list):
+                log = []
+    except Exception:
+        log = []
+    
+    entry = {
+        "timestamp": time.time(),
+        "datetime": datetime.now().isoformat(),
+        "chat_id": chat_id,
+        "user_id": user_id,
+        "user_name": user_name,
+        "action": action,
+        "details": details
+    }
+    log.append(entry)
+    
+    try:
+        with open(TRIVIA_ADMIN_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(log, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.exception("Error saving admin log", exc_info=e)
+
+async def trivia_import_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /trivia_import - Import trivia questions from JSON (admin only).
+    Usage: /trivia_import <JSON data>
+    or reply to a message containing JSON with /trivia_import
+    
+    JSON format:
+    [
+      {
+        "id": 1,
+        "question": "What is 2+2?",
+        "choices": ["3", "4", "5"],
+        "answer": 1
+      },
+      ...
+    ]
+    """
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    
+    # Check if trivia module is enabled
+    if not is_module_enabled(chat.id, "trivia_enabled"):
+        return await msg.reply_text("El módulo Trivia está desactivado en este chat.")
+    
+    # Admin only
+    if not await is_admin(context, chat.id, user.id):
+        return await msg.reply_text("Este comando es solo para administradores.")
+    
+    # Get JSON data from command args or replied message
+    json_text = None
+    if msg.reply_to_message and msg.reply_to_message.text:
+        json_text = msg.reply_to_message.text.strip()
+    elif context.args:
+        json_text = " ".join(context.args).strip()
+    
+    if not json_text:
+        usage = (
+            "❌ Uso: /trivia_import <JSON>\n"
+            "o responde a un mensaje con JSON usando /trivia_import\n\n"
+            "Formato esperado:\n"
+            "<code>[\n"
+            '  {"id": 1, "question": "¿2+2?", "choices": ["3", "4", "5"], "answer": 1},\n'
+            '  {"id": 2, "question": "¿Capital de España?", "choices": ["Madrid", "Barcelona"], "answer": 0}\n'
+            "]</code>"
+        )
+        return await msg.reply_text(usage, parse_mode="HTML")
+    
+    # Try to parse JSON
+    try:
+        imported_pool = json.loads(json_text)
+    except json.JSONDecodeError as e:
+        return await msg.reply_text(f"❌ Error al parsear JSON: {str(e)}")
+    
+    # Validate the pool structure
+    is_valid, error_msg = _validate_pool_list(imported_pool)
+    if not is_valid:
+        return await msg.reply_text(f"❌ Validación fallida: {error_msg}")
+    
+    # Backup current pool before importing
+    backup_path = _backup_pool()
+    backup_info = f"Backup guardado en: {os.path.basename(backup_path)}" if backup_path else "⚠️ No se pudo crear backup"
+    
+    # Save the new pool
+    save_pool(imported_pool)
+    
+    # Log the action
+    _log_admin_action(
+        chat.id, 
+        user.id, 
+        user.first_name or "Admin",
+        "trivia_import",
+        f"Imported {len(imported_pool)} questions"
+    )
+    
+    success_msg = (
+        f"✅ Pool importado exitosamente.\n"
+        f"📊 Total de preguntas: {len(imported_pool)}\n"
+        f"💾 {backup_info}"
+    )
+    await msg.reply_text(success_msg)
+
+
+# =========================
 # ON MESSAGE
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
@@ -1835,6 +2078,9 @@ def main():
     # TOP TTT
     app.add_handler(CommandHandler("top_ttt", top_ttt_cmd))
 
+    # TRIVIA
+    app.add_handler(CommandHandler("trivia_import", trivia_import_cmd))
+
     # TIKTOK DOWNLOADER
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tiktok_detector), group=1)
 
@@ -1855,6 +2101,7 @@ def main():
     register_command("ttt", "inicia una partida de tres en raya (responde a alguien o usa @usuario opcionalmente)")
     register_command("tres", "alias de /ttt para iniciar tres en raya")
     register_command("top_ttt", "muestra el ranking de tres en raya (wins/draws/losses)")
+    register_command("trivia_import", "importa preguntas de trivia desde JSON", admin=True)
 
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
