@@ -1694,7 +1694,7 @@ HUB_MODULES = {
     "admin": {"title": "@admin", "desc": "Avisa solo al equipo de administradores.", "cmds": ["@admin [motivo]"]},
     "autoresp": {"title": "Autoresponder", "desc": "Respuestas automáticas personalizadas por usuario.", "cmds": ["autoresponder", "autoresponder_off"]},
     "ttt": {"title": "Tres en raya", "desc": "Juega partidas de TTT con el grupo y consulta clasificaciones.", "cmds": ["ttt", "top_ttt"]},
-    "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_on", "trivia_off", "trivia_stats"]},
+    "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_import"]},
     "namechg": {"title": "SangMata", "desc": "Notifica cambios de nombre y @ cuando la persona habla en el grupo.", "cmds": []},
 }
 
@@ -1786,6 +1786,269 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
+# TRIVIA MODULE
+
+# Archivos de datos del módulo TRIVIA
+TRIVIA_POOL_FILE = os.path.join(PERSIST_DIR, "pool.json")
+TRIVIA_STATE_FILE = os.path.join(PERSIST_DIR, "trivia_state.json")
+TRIVIA_STATS_FILE = os.path.join(PERSIST_DIR, "trivia_stats.json")
+TRIVIA_ADMIN_LOG_FILE = os.path.join(PERSIST_DIR, "trivia_admin_log.json")
+TRIVIA_BACKUP_DIR = os.path.join(PERSIST_DIR, "backups")
+
+def load_trivia_pool() -> dict:
+    """Carga el pool de preguntas de trivia desde pool.json"""
+    if os.path.exists(TRIVIA_POOL_FILE):
+        try:
+            with open(TRIVIA_POOL_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    return {}
+                return data
+        except Exception:
+            logging.exception("Error loading trivia pool")
+            return {}
+    return {}
+
+def save_trivia_pool(pool: dict) -> None:
+    """Guarda el pool de preguntas de trivia en pool.json"""
+    try:
+        os.makedirs(os.path.dirname(TRIVIA_POOL_FILE) or ".", exist_ok=True)
+        with open(TRIVIA_POOL_FILE, "w", encoding="utf-8") as f:
+            json.dump(pool, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logging.exception("Error saving trivia pool")
+
+def backup_trivia_pool() -> str | None:
+    """Crea un backup del pool con timestamp y lo guarda en /data/backups/"""
+    if not os.path.exists(TRIVIA_POOL_FILE):
+        return None
+    try:
+        os.makedirs(TRIVIA_BACKUP_DIR, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"pool_backup_{timestamp}.json"
+        backup_path = os.path.join(TRIVIA_BACKUP_DIR, backup_filename)
+        
+        with open(TRIVIA_POOL_FILE, "r", encoding="utf-8") as src:
+            data = src.read()
+        with open(backup_path, "w", encoding="utf-8") as dst:
+            dst.write(data)
+        
+        return backup_filename
+    except Exception:
+        logging.exception("Error creating trivia pool backup")
+        return None
+
+def load_trivia_state() -> dict:
+    """Carga el estado actual de trivia desde trivia_state.json"""
+    if os.path.exists(TRIVIA_STATE_FILE):
+        try:
+            with open(TRIVIA_STATE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    return {}
+                return data
+        except Exception:
+            logging.exception("Error loading trivia state")
+            return {}
+    return {}
+
+def save_trivia_state(state: dict) -> None:
+    """Guarda el estado de trivia en trivia_state.json"""
+    try:
+        os.makedirs(os.path.dirname(TRIVIA_STATE_FILE) or ".", exist_ok=True)
+        with open(TRIVIA_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logging.exception("Error saving trivia state")
+
+def load_trivia_stats() -> dict:
+    """Carga las estadísticas de trivia desde trivia_stats.json"""
+    if os.path.exists(TRIVIA_STATS_FILE):
+        try:
+            with open(TRIVIA_STATS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    return {}
+                return data
+        except Exception:
+            logging.exception("Error loading trivia stats")
+            return {}
+    return {}
+
+def save_trivia_stats(stats: dict) -> None:
+    """Guarda las estadísticas de trivia en trivia_stats.json"""
+    try:
+        os.makedirs(os.path.dirname(TRIVIA_STATS_FILE) or ".", exist_ok=True)
+        with open(TRIVIA_STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(stats, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logging.exception("Error saving trivia stats")
+
+def load_trivia_admin_log() -> list:
+    """Carga el log de acciones administrativas desde trivia_admin_log.json"""
+    if os.path.exists(TRIVIA_ADMIN_LOG_FILE):
+        try:
+            with open(TRIVIA_ADMIN_LOG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if not isinstance(data, list):
+                    return []
+                return data
+        except Exception:
+            logging.exception("Error loading trivia admin log")
+            return []
+    return []
+
+def save_trivia_admin_log(log: list) -> None:
+    """Guarda el log de acciones administrativas en trivia_admin_log.json"""
+    try:
+        os.makedirs(os.path.dirname(TRIVIA_ADMIN_LOG_FILE) or ".", exist_ok=True)
+        with open(TRIVIA_ADMIN_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(log, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logging.exception("Error saving trivia admin log")
+
+def log_trivia_admin_action(action: str, user_id: int, user_name: str, details: dict = None) -> None:
+    """Registra una acción administrativa en el log"""
+    log = load_trivia_admin_log()
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "action": action,
+        "user_id": user_id,
+        "user_name": user_name,
+        "details": details or {}
+    }
+    log.append(entry)
+    save_trivia_admin_log(log)
+
+async def trivia_import_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /trivia_import - Importa preguntas al pool de trivia
+    Solo administradores. Crea un backup automático antes de importar.
+    
+    Uso:
+    /trivia_import <json> - importa preguntas desde JSON inline
+    
+    Formato JSON esperado:
+    {
+      "questions": [
+        {
+          "question": "¿Texto de la pregunta?",
+          "answers": ["respuesta1", "respuesta2", "respuesta3", "respuesta4"],
+          "correct": 0,
+          "category": "opcional"
+        }
+      ]
+    }
+    """
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    
+    # Solo administradores
+    if not await is_admin(context, chat.id, user.id):
+        return await msg.reply_text("❌ Este comando es solo para administradores.")
+    
+    # Verificar que el módulo esté habilitado
+    if not is_module_enabled(chat.id, "trivia_enabled"):
+        return await msg.reply_text("❌ El módulo Trivia está desactivado en este chat.")
+    
+    # Obtener el JSON
+    if not context.args:
+        help_text = (
+            "📚 <b>Importar preguntas de Trivia</b>\n\n"
+            "Uso: <code>/trivia_import &lt;json&gt;</code>\n\n"
+            "Formato JSON:\n"
+            "<pre>{\n"
+            '  "questions": [\n'
+            "    {\n"
+            '      "question": "¿Pregunta?",\n'
+            '      "answers": ["A", "B", "C", "D"],\n'
+            '      "correct": 0,\n'
+            '      "category": "opcional"\n'
+            "    }\n"
+            "  ]\n"
+            "}</pre>\n\n"
+            "Se creará un backup automático antes de importar."
+        )
+        return await msg.reply_text(help_text, parse_mode="HTML")
+    
+    # Parsear JSON
+    json_text = " ".join(context.args)
+    try:
+        import_data = json.loads(json_text)
+    except json.JSONDecodeError as e:
+        return await msg.reply_text(f"❌ JSON inválido: {str(e)}")
+    
+    # Validar estructura
+    if not isinstance(import_data, dict) or "questions" not in import_data:
+        return await msg.reply_text('❌ El JSON debe contener una clave "questions" con una lista.')
+    
+    questions = import_data.get("questions", [])
+    if not isinstance(questions, list):
+        return await msg.reply_text('❌ La clave "questions" debe ser una lista.')
+    
+    if not questions:
+        return await msg.reply_text("❌ No hay preguntas para importar.")
+    
+    # Validar cada pregunta
+    valid_questions = []
+    for i, q in enumerate(questions):
+        if not isinstance(q, dict):
+            return await msg.reply_text(f"❌ La pregunta #{i+1} no es un objeto válido.")
+        
+        if "question" not in q or not isinstance(q["question"], str):
+            return await msg.reply_text(f'❌ La pregunta #{i+1} debe tener una clave "question" con texto.')
+        
+        if "answers" not in q or not isinstance(q["answers"], list) or len(q["answers"]) < 2:
+            return await msg.reply_text(f'❌ La pregunta #{i+1} debe tener al menos 2 respuestas.')
+        
+        if "correct" not in q or not isinstance(q["correct"], int):
+            return await msg.reply_text(f'❌ La pregunta #{i+1} debe tener un índice "correct" válido.')
+        
+        if q["correct"] < 0 or q["correct"] >= len(q["answers"]):
+            return await msg.reply_text(f'❌ La pregunta #{i+1} tiene un índice "correct" fuera de rango.')
+        
+        valid_questions.append(q)
+    
+    # Crear backup
+    backup_name = backup_trivia_pool()
+    backup_msg = f"✅ Backup creado: {backup_name}\n" if backup_name else ""
+    
+    # Cargar pool existente
+    pool = load_trivia_pool()
+    if not isinstance(pool, dict):
+        pool = {}
+    
+    # Asegurar que existe la estructura
+    if "questions" not in pool:
+        pool["questions"] = []
+    
+    # Agregar nuevas preguntas
+    initial_count = len(pool["questions"])
+    pool["questions"].extend(valid_questions)
+    save_trivia_pool(pool)
+    
+    # Log de acción
+    log_trivia_admin_action(
+        action="trivia_import",
+        user_id=user.id,
+        user_name=user.first_name or "Unknown",
+        details={
+            "questions_imported": len(valid_questions),
+            "total_questions": len(pool["questions"]),
+            "backup": backup_name
+        }
+    )
+    
+    # Confirmar
+    await msg.reply_text(
+        f"{backup_msg}"
+        f"✅ Se importaron {len(valid_questions)} preguntas.\n"
+        f"📊 Total en el pool: {len(pool['questions'])} preguntas."
+    )
+
+
+# =========================
 # MAIN
 
 
@@ -1835,6 +2098,9 @@ def main():
     # TOP TTT
     app.add_handler(CommandHandler("top_ttt", top_ttt_cmd))
 
+    # TRIVIA
+    app.add_handler(CommandHandler("trivia_import", trivia_import_cmd))
+
     # TIKTOK DOWNLOADER
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tiktok_detector), group=1)
 
@@ -1855,6 +2121,7 @@ def main():
     register_command("ttt", "inicia una partida de tres en raya (responde a alguien o usa @usuario opcionalmente)")
     register_command("tres", "alias de /ttt para iniciar tres en raya")
     register_command("top_ttt", "muestra el ranking de tres en raya (wins/draws/losses)")
+    register_command("trivia_import", "importa preguntas al pool de trivia (solo admin)", admin=True)
 
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
