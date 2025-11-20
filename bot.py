@@ -1713,8 +1713,9 @@ async def trivia_pool_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg_text += f"\n<b>Muestra de preguntas:</b>\n"
     
     for i, q in enumerate(samples, 1):
-        question = q.get("question", "Sin pregunta")[:50]
-        if len(q.get("question", "")) > 50:
+        full_question = q.get("question", "Sin pregunta")
+        question = full_question[:50]
+        if len(full_question) > 50:
             question += "..."
         msg_text += f"{i}. {html.escape(question)}\n"
     
