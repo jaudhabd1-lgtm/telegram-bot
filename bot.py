@@ -53,11 +53,13 @@ logging.basicConfig(level=logging.INFO)
 
 # =========================
 # CACHES PARA FICHEROS
+# =========================
 SETTINGS_CACHE: Dict[str, Any] | None = None
 ROSTER_CACHE: Dict[str, Any] | None = None
 
 # =========================
 # SETTINGS (por chat)
+# =========================
 def load_settings() -> Dict[str, Any]:
     global SETTINGS_CACHE
     if SETTINGS_CACHE is not None:
@@ -103,6 +105,7 @@ def is_spooky(cid: int) -> bool:
 
 # =========================
 # /help dinámico (formato BotFather)
+# =========================
 def register_command(name: str, desc: str, admin: bool = False) -> None:
     COMMANDS[name] = {"desc": desc, "admin": admin}
 
@@ -116,6 +119,7 @@ def format_commands_list_botfather() -> str:
 
 # =========================
 # UTILS
+# =========================
 def format_duration(seconds: float) -> str:
     seconds = int(seconds)
     d, rem = divmod(seconds, 86400)
@@ -159,6 +163,7 @@ def is_module_enabled(chat_id: int, key: str) -> bool:
 
 # =========================
 # ROSTER (con cache)
+# =========================
 def load_roster() -> dict:
     global ROSTER_CACHE
     if ROSTER_CACHE is not None:
@@ -186,1631 +191,787 @@ def save_roster(roster: dict) -> None:
     except Exception as e:
         logging.exception("No se pudo guardar roster", exc_info=e)
 
-async def prune_roster(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Elimina del roster los usuarios que ya no están en el grupo.
-    Si hay error al consultar el estado de un usuario, lo mantiene en el roster.
-    """
+def get_roster_entry(key: str) -> Any:
     roster = load_roster()
-    chat_roster = roster.get(str(chat_id), {})
-    cleaned = {}
-    for uid_str, info in chat_roster.items():
-        try:
-            member = await context.bot.get_chat_member(chat_id, int(uid_str))
-            logging.info(f"Usuario {uid_str}: status={member.status}")
-            if member.status not in ("left", "kicked"):
-                cleaned[uid_str] = info
-            else:
-                logging.info(f"Eliminando usuario {uid_str} por status: {member.status}")
-        except Exception as e:
-            logging.warning(f"Error consultando {uid_str}: {e}")
-            # Si hay error, mantenlo en el roster por seguridad.
-            cleaned[uid_str] = info
-    roster[str(chat_id)] = cleaned
-    save_roster(roster)
+    return roster.get(key)
 
-# --- Name change detection (SangMata-like) ---
-def _detect_name_changes(chat_id: int, user) -> dict:
+def set_roster_entry(key: str, value: Any) -> None:
     roster = load_roster()
-    chat_data = roster.get(str(chat_id), {})
-    rec = chat_data.get(str(user.id)) or {}
-    old_first = rec.get("first") or None
-    old_user = (rec.get("username") or None)
-    new_first = (user.first_name or None)
-    new_user = ((user.username or "").lower() or None)
-    changed = False
-    if old_first != new_first:
-        changed = True
-    if old_user != new_user:
-        changed = True
-    return {
-        "changed": changed,
-        "old_first": old_first, "new_first": new_first,
-        "old_user": old_user, "new_user": new_user
-    }
-
-def upsert_roster_member(chat_id: int, user) -> None:
-    if not user:
-        return
-    roster = load_roster()
-    key = str(chat_id)
-    chat_data = roster.get(key, {})
-    uid = str(user.id)
-    first = user.first_name or "Usuario"
-    username = (user.username or "").lower() or None
-    display = user.first_name or (("@" + username) if username else "Usuario")
-    rec = chat_data.get(uid) or {}
-    rec["first"] = first
-    rec["username"] = username  # may be None
-    rec["name"] = display
-    rec["is_bot"] = getattr(user, "is_bot", False)  # <-- Cambiado: almacena valor real de Telegram
-    rec["last_ts"] = time.time()
-    rec["messages"] = int(rec.get("messages", 0)) + 1 if "messages" in rec else 1
-    chat_data[uid] = rec
-    roster[key] = chat_data
-    save_roster(roster)
-
-def get_chat_roster(chat_id: int) -> List[dict]:
-    roster = load_roster()
-    data = roster.get(str(chat_id))
-    if not data or not isinstance(data, dict):
-        return []
-    norm = []
-    for uid_str, info in data.items():
-        try:
-            uid = int(uid_str)
-        except Exception:
-            continue
-        raw_name = str(info.get("name") or "").strip() or "usuario"
-        username = raw_name[1:].lower() if raw_name.startswith("@") else ""
-        is_bot = bool(info.get("is_bot", False))  # <-- Cambiado: lee valor fijo, no heurístico
-        norm.append({
-            "id": uid,
-            "first_name": raw_name,
-            "username": username,
-            "is_bot": is_bot
-        })
-    return norm
-
-def _display_name(u: dict) -> str:
-    name = (u.get("first_name") or u.get("username") or "usuario").strip()
-    return name if name else "usuario"
-
-def build_mentions_html(members: List[dict]) -> List[str]:
-    seen = set()
-    clean = []
-    for u in members:
-        uid = u.get("id")
-        if not uid or uid in seen or u.get("is_bot"):
-            continue
-        seen.add(uid)
-        clean.append(u)
-    chunks, batch = [], []
-    for i, u in enumerate(clean, 1):
-        uid = u["id"]
-        name = _display_name(u)
-        mention = f'<a href="tg://user?id={uid}">{html.escape(name)}</a>'
-        batch.append(mention)
-        if i % 20 == 0:
-            chunks.append(", ".join(batch))
-            batch = []
-    if batch:
-        chunks.append(", ".join(batch))
-    return chunks
-
-ROSTER_LINE_RE = re.compile(r"^\s*\[?(\d+)\]?\s+(.+?)\s+\[?(-?\d+)\]?\s*$")
-
-def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
-    if not url:
-        return (None, {})
+    roster[key] = value
     try:
-        from urllib.request import urlopen
-        with urlopen(url, timeout=15) as r:
-            content = r.read().decode("utf-8", errors="replace")
+        save_roster(roster)
     except Exception:
-        return (None, {})
-    parsed: dict[str, dict[str, Any]] = {}
-    for line in content.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        m = ROSTER_LINE_RE.match(line)
-        if not m:
-            continue
-        msgs = int(m.group(1))
-        middle = m.group(2).strip()
-        uid_str = m.group(3)
-        try:
-            uid = str(int(uid_str))
-        except ValueError:
-            continue
-        username = None
-        name = middle
-        if middle.startswith("@"):
-            username = middle[1:]
-            name = middle
-        parsed[uid] = {
-            "name": name,
-            "username": username,
-            "is_bot": False,
-            "last_ts": time.time(),
-            "messages": msgs,
-        }
-    m = re.search(r"list_(\-?\d+)\.txt", url)
-    chat_id = int(m.group(1)) if m else None
-    return (chat_id, parsed)
+        # si hay error al guardar (p.e. permisos), guardamos sólo en memoria
+        ROSTER_CACHE = dict(roster)
 
-def _merge_roster(
-    existing: dict[str, dict[str, Any]],
-    incoming: dict[str, dict[str, Any]],
-    mode: str = "merge",
-) -> dict[str, dict[str, Any]]:
-    out = dict(existing)
-    for uid, pdata in incoming.items():
-        if uid not in out:
-            out[uid] = pdata
-            continue
-        cur = dict(out[uid])
-        if mode == "merge":
-            if not cur.get("username") and pdata.get("username"):
-                cur["username"] = pdata["username"]
-            if not cur.get("name") and pdata.get("name"):
-                cur["name"] = pdata["name"]
-            cur["messages"] = max(int(cur.get("messages", 0)), int(pdata.get("messages", 0)))
-            cur["last_ts"] = max(float(cur.get("last_ts", 0.0)), float(pdata.get("last_ts", 0.0)))
-        out[uid] = cur
-    return out
+# =========================
+# ADMIN + ROSTER UTILS
+# =========================
+def _strip_title(username: str) -> str:
+    # remove optional [TTT#] prefix from displayed name
+    return re.sub(r"^\[TTT\d+\]\s*", "", username)
+
+def _name(user: Any, mention: bool = False) -> str:
+    if not user:
+        return "(alguien)"
+    if getattr(user, "username", None):
+        return "@" + user.username
+    full_name = (user.full_name or "").strip() or "(alguien)"
+    return html.escape(full_name)
+
+def _name_link(user: Any) -> str:
+    if not user:
+        return "(alguien)"
+    name = _name(user)
+    if getattr(user, "id", None):
+        return f'<a href="tg://user?id={user.id}">{name}</a>'
+    return html.escape(name)
+
+def _short_ts(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+def _mk_roster_entry(user: Any) -> Dict[str, Any]:
+    return {
+        "name": _name(user),
+        "id": getattr(user, "id", None),
+        "user": getattr(user, "username", None),
+        "ts": _short_ts(datetime.now(ZoneInfo("Europe/Madrid"))),
+    }
 
 def ensure_import_once():
     if not LIST_URL:
         return
     ded_chat, parsed = _import_list(LIST_URL)
-    if not parsed or ded_chat is None:
-        return
-    cs = get_chat_settings(ded_chat)
-    if LIST_IMPORT_ONCE and cs.get("list_import_done"):
-        return
-    roster = load_roster()
-    key = str(ded_chat)
-    existing = roster.get(key, {})
-    if LIST_IMPORT_MODE == "seed" and existing:
-        pass
-    else:
-        merged = _merge_roster(existing, parsed, mode=LIST_IMPORT_MODE)
-        roster[key] = merged
-        save_roster(roster)
-    if LIST_IMPORT_ONCE:
-        set_chat_setting(ded_chat, "list_import_done", True)
+    if parsed:
+        # only import first time the bot runs (to avoid re-adding on each restart)
+        if LIST_IMPORT_ONCE:
+            settings = load_settings()
+            # if we already imported once before, skip
+            if settings.get("imported_once"):
+                return
+            # otherwise mark that we did and continue to import
+            set_chat_setting(0, "imported_once", True)
+        # Save deduplicated list to roster
+        _save_roster_import_list(ded_chat)
 
 # =========================
-# TEXTOS (mensajes generales, sin Halloween)
-AFK_PHRASES = [
-    "💤 {first} se ha puesto en modo AFK.",
-    "📴 {first} está AFK. Deja tu recado.",
-    "🚪 {first} se ausenta un momento.",
-    "🌙 {first} se fue a contemplar el vacío un rato.",
-    "☕ {first} está en pausa café.",
-    "💻 {first} se ha quedado dormido sobre el teclado.",
-    "🚶‍♂️ {first} salió un segundo… o eso dijo.",
-    "📵 {first} desconectó para sobrevivir al mundo real.",
-    "🐸 {first} desapareció como un ninja.",
-    "🔕 {first} activó el modo silencio.",
-    "🪑 {first} dejó la silla girando todavía.",
-    "🌀 {first} salió a buscar sentido a la vida (volverá pronto)."
-]
-AFK_RETURN = [
-    "👋 {first} ha vuelto.",
-    "🎉 {first} está de vuelta.",
-    "💫 {first} ha regresado.",
-    "🔥 {first} ha vuelto al mundo digital.",
-    "✨ {first} ha reaparecido.",
-    "🚀 {first} ha aterrizado de nuevo.",
-    "🧃 {first} volvió, con su bebida en la mano.",
-    "🌈 {first} regresa con energía renovada.",
-    "🐾 {first} ha encontrado el camino de regreso.",
-    "🎊 {first} ha regresado triunfalmente."
-]
-
-def choose_afk_phrase(chat_id: int) -> str:
-    # El chat_id se mantiene por compatibilidad, pero no afecta al texto.
-    return random.choice(AFK_PHRASES)
-
-def choose_return_phrase(chat_id: int) -> str:
-    # El chat_id se mantiene por compatibilidad, pero no afecta al texto.
-    return random.choice(AFK_RETURN)
-
-def txt_start_private(spooky: bool) -> str:
-    return ("¡Hola! Soy RuruBot 🐸\n"
-            "Gestiono grupos con AFK, autoresponder, @all/@admin y más.\n\n"
-            "Pulsa el botón para ver los comandos disponibles.")
-
-def txt_start_group(spooky: bool) -> str:
-    return "🐸 RuruBot activo en este grupo. Usa /help para ver qué puedo hacer."
-
-def txt_help_triggers(spooky: bool) -> str:
-    return ("\n\nAtajos sin barra (informativo):\n"
-            "brb / afk — activa afk\n"
-            "hora [país] — hora del país (por defecto España)\n"
-            "🛡️ @all [motivo] — mencionar a todos\n"
-            "@admin [motivo] — avisar solo a administradores")
-
-def txt_all_perm(spooky: bool) -> str:
-    return "Solo los administradores pueden usar @all."
-
-def txt_all_disabled(spooky: bool) -> str:
-    return "La función @all está desactivada en este grupo."
-
-def txt_all_cooldown(spooky: bool) -> str:
-    return "Debes esperar antes de volver a usar @all."
-
-def txt_all_header(spooky: bool, by_first: str, extra: str) -> str:
-    base = "@all por "
-    out = f"{base}{by_first}"
-    if extra:
-        out += f": {extra}"
-    return out
-
-def txt_motivo_label(spooky: bool) -> str:
-    return "<b>Motivo:</b> "
-
-def txt_no_users(spooky: bool) -> str:
-    return "No tengo lista de usuarios para mencionar aquí."
-
-def txt_no_targets(spooky: bool) -> str:
-    return "No hay a quién mencionar."
-
-def txt_all_confirm(spooky: bool) -> str:
-    return "¿Quieres mencionar a todos los usuarios?"
-
-def btn_confirm(spooky: bool) -> str:
-    return "Confirmar"
-
-def btn_cancel(spooky: bool) -> str:
-    return "Cancelar"
-
-def txt_all_confirm_bad(spooky: bool) -> str:
-    return "Confirmación inválida."
-
-def txt_only_initiator(spooky: bool) -> str:
-    return "Solo puede confirmar quien inició la acción."
-
-def txt_sending_mentions(spooky: bool) -> str:
-    return "Enviando menciones…"
-
-def txt_canceled(spooky: bool) -> str:
-    return "Cancelado."
-
-def txt_cancel_cmd(spooky: bool) -> str:
-    return "Cancelado."
-
-def txt_admin_disabled(spooky: bool) -> str:
-    return "La función @admin está desactivada en este grupo."
-
-def txt_admin_cooldown(spooky: bool) -> str:
-    return "Debes esperar antes de volver a usar @admin."
-
-def txt_admin_header(spooky: bool, by_first: str, extra: str) -> str:
-    base = "@admin por "
-    out = f"{base}{by_first}"
-    if extra:
-        out += f": {extra}"
-    return out
-
-def txt_no_admins(spooky: bool) -> str:
-    return "No encuentro administradores para mencionar aquí."
-
-def txt_admin_confirm(spooky: bool) -> str:
-    return "¿Quieres avisar a los administradores?"
-
-def txt_calling_admins(spooky: bool) -> str:
-    return "Avisando a administradores…"
-
-def txt_autoresp_usage(spooky: bool) -> str:
-    return "Uso: /autoresponder @usuario <texto> — o responde a un mensaje con /autoresponder <texto>"
-
-def txt_autoresp_reply_usage(spooky: bool) -> str:
-    return "Uso: responde a un mensaje con /autoresponder <texto>"
-
-def txt_autoresp_not_found(spooky: bool) -> str:
-    return "No se ha podido identificar al usuario."
-
-def txt_autoresp_on(spooky: bool, first: str, text: str) -> str:
-    return f"✅ Autoresponder activado para {first}. Responderé con: “{text}”."
-
-def txt_autoresp_off_usage(spooky: bool) -> str:
-    return "Uso: /autoresponder_off @usuario — o responde a su mensaje."
-
-def txt_autoresp_off(spooky: bool, first: str) -> str:
-    return f"❌ Autoresponder desactivado para {first}."
-
-def txt_autoresp_none(spooky: bool, first: str) -> str:
-    return f"{first} no tenía autoresponder activo."
-
-def txt_hora_unknown(spooky: bool) -> str:
-    return "No reconozco ese país. Ejemplos: /hora, /hora México, /hora Reino Unido"
-
-def txt_hora_line(spooky: bool, flag: str, country: str, hhmmss: str) -> str:
-    return f"En {flag} {country} son las {hhmmss}."
-
+# COMANDOS: START, HELP, CONFIG
 # =========================
-# START / HELP / HALLOWEEN
+HELP_HUB_MODULES: Dict[str, str] = {}
 
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el mensaje de bienvenida del bot."""
     msg = update.message
     chat = msg.chat
     arg0 = (context.args[0].lower() if context.args else "")
-
-    # Deep link: t.me/<bot>?start=help → muestra la ayuda directamente
-    if context.args and context.args[0].lower() == "help":
-        if msg.chat.type != ChatType.PRIVATE:
-            username = await _bot_username(context)
-            url = f"https://t.me/{username}?start=help"
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
-            return await msg.reply_text("📬 Contáctame en privado para ver la ayuda.", reply_markup=kb)
-        return await help_cmd(update, context)
-
-    if chat.type == ChatType.PRIVATE or arg0 == "hub":
-        try:
-            await context.bot.send_photo(
-                chat_id=msg.chat.id,
-                photo="https://raw.githubusercontent.com/jaudhabd1-lgtm/telegram-bot/main/start.jpg",
-                caption=(
-                    "¡Hola! Soy RuruBot 🐸\n"
-                    "¡Pulsa en los botones para ver información de los módulos y comandos disponibles!"),
-                reply_markup=build_hub_keyboard()
-            )
-        except Exception:
-            pass
+    if arg0 == "help":
+        # shortcut: "/start help" para abrir panel de ayuda directamente
+        await config_cmd(update, context)
         return
-
-    try:
-        username = (await context.bot.get_me()).username
-        url = f"https://t.me/{username}?start=hub"
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
-        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos.", reply_markup=kb)
-    except Exception:
-        await msg.reply_text("📩 Abre el chat privado para ver el menú de módulos: busca mi perfil y pulsa Iniciar.")
-    return
-
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    chat = msg.chat
-    spooky = is_spooky(chat.id)
-
-    # En grupos: redirigir a privado con botón y autodestrucción
-    if chat.type != ChatType.PRIVATE:
-        username = await _bot_username(context)
-        text = ("🎯 Contáctame en privado para ver la ayuda completa."
-                if spooky else
-                "📬 Contáctame en privado para ver la ayuda completa.")
-        url = f"https://t.me/{username}?start=help"
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("Abrir chat privado", url=url)]])
-        m = await msg.reply_text(text, reply_markup=kb, disable_web_page_preview=True)
-        try:
-            async def _del():
-                await asyncio.sleep(20)
-                try:
-                    await m.delete()
-                except Exception:
-                    pass
-            asyncio.create_task(_del())
-        except Exception:
-            pass
-        return
-
-    # En privado: ayuda completa (formato elegante)
-    header = "🐸 <b>Comandos disponibles</b>\n"
-    desc = (
-        "<i>Usa los comandos con / y algunos atajos sin barra como</i> "
-        "<code>afk</code>, <code>hora México</code> o <code>@all</code>.\n\n"
+    # Mensaje de bienvenida
+    text = (
+        "<b>Hola!</b> Soy RuruBot 🐸\n"
+        "Aquí tienes la lista de cosas que sé hacer. Usa /help para "
+        "ver los comandos disponibles.\n"
     )
-
-    lines = []
-    for name, info in sorted(COMMANDS.items()):
-        admin_tag = "🛡️ " if info.get("admin") else "• "
-        lines.append(f"{admin_tag}<b>/{name}</b> — {html.escape(info.get('desc'))}")
-
-    text = header + desc + "\n".join(lines) + txt_help_triggers(spooky)
     await msg.reply_text(text, parse_mode="HTML", disable_web_page_preview=True)
 
-async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await safe_q_answer(q)
-    fake_update = Update(update.update_id, message=q.message)
-    await help_cmd(fake_update, context)
-
-# =========================
-# AFK
-async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista los comandos disponibles (dinámico)."""
     msg = update.message
-    chat = msg.chat
-    user = msg.from_user
-
-    # Respect module toggle
-    if not is_module_enabled(chat.id, "afk_enabled"):
-        return await msg.reply_text("El módulo AFK está desactivado en este chat.")
-
-    reason = " ".join(context.args) if context.args else None
-    AFK_USERS[user.id] = {"since": time.time(), "reason": reason, "username": (user.username or "").lower(), "first_name": user.first_name}
-    phrase = choose_afk_phrase(chat.id).format(first=user.first_name)
-    if reason:
-        phrase += (" 🕯️ Motivo: " if is_spooky(chat.id) else " Motivo: ") + reason
-    await msg.reply_text(phrase)
-
-async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text:
-        return
-
-    # Respect module toggle
-    if not is_module_enabled(msg.chat.id, "afk_enabled"):
-        return
-
-    t = msg.text.strip()
-    m = re.match(r"(?is)^\s*(brb|afk)\b[^\S\r\n]*(.*)$", t)
-    if not m:
-        return
-    reason = m.group(2).strip()
-    context.args = reason.split() if reason else []
-    context.user_data["afk_skip_message_id"] = msg.message_id
-    await afk_cmd(update, context)
-
-async def notify_if_mentioning_afk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg:
-        return
-
-    # Respect module toggle
-    if not is_module_enabled(msg.chat.id, "afk_enabled"):
-        return
-
-    spooky = is_spooky(msg.chat.id)
-    if msg.reply_to_message and msg.reply_to_message.from_user:
-        target = msg.reply_to_message.from_user
-        if target.id in AFK_USERS:
-            data = AFK_USERS[target.id]
-            since = data.get("since")
-            reason = data.get("reason")
-            dur = format_duration(time.time() - since)
-            base = "💤👻 " if spooky else "💤 "
-            txt = f"{base}{target.first_name} está AFK desde {dur}."
-            if reason:
-                txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
-            await msg.reply_text(txt)
-    if not msg.entities:
-        return
-    afk_by_username = {(info.get("username") or ""): uid for uid, info in AFK_USERS.items() if info.get("username")}
-    for ent in msg.entities:
-        if ent.type == "mention":
-            username = msg.text[ent.offset + 1:ent.offset + ent.length].lower()
-            uid = afk_by_username.get(username)
-            if uid:
-                info = AFK_USERS[uid]
-                first = info.get("first_name")
-                since = info.get("since")
-                reason = info.get("reason")
-                dur = format_duration(time.time() - since)
-                base = "💤👻 " if spooky else "💤 "
-                txt = f"{base}{first} está AFK desde {dur}."
-                if reason:
-                    txt += (" 🕯️ Motivo: " if spooky else " Motivo: ") + reason
-                await msg.reply_text(txt)
-
-# =========================
-# AUTORESPONDER
-async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    # SOLO ADMIN
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
-        return await msg.reply_text("Este comando es solo para administradores.")
-    chat = msg.chat
-    spooky = is_spooky(chat.id)
-
-    target_user = None
-    response_text = None
-
-    if msg.reply_to_message:
-        target_user = msg.reply_to_message.from_user
-        response_text = " ".join(context.args).strip()
-        if not response_text:
-            await msg.reply_text(txt_autoresp_reply_usage(spooky))
-            return
-    else:
-        if len(context.args) < 2:
-            await msg.reply_text(txt_autoresp_usage(spooky))
-            return
-        mention = context.args[0]
-        response_text = " ".join(context.args[1:]).strip()
-        if not mention.startswith("@"):
-            await msg.reply_text("Debes indicar un @usuario válido o usar el comando en respuesta a su mensaje.")
-            return
-        username = mention[1:].lower()
-        roster = load_roster().get(str(chat.id), {})
-        uid = None
-        for uid_str, info in roster.items():
-            name = str(info.get("name") or "").strip()
-            if name.startswith("@") and name[1:].lower() == username:
-                uid = int(uid_str)
-                break
-        if uid is None:
-            await msg.reply_text(txt_autoresp_not_found(spooky))
-            return
-        member = await context.bot.get_chat_member(chat.id, uid)
-        target_user = member.user
-
-    if chat.id not in AUTO_RESPONDERS:
-        AUTO_RESPONDERS[chat.id] = {}
-    AUTO_RESPONDERS[chat.id][target_user.id] = response_text
-    await msg.reply_text(txt_autoresp_on(spooky, target_user.first_name, response_text))
-
-async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    # SOLO ADMIN
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
-        return await msg.reply_text("Este comando es solo para administradores.")
-    chat = msg.chat
-    spooky = is_spooky(chat.id)
-    target_user = None
-
-    if msg.reply_to_message:
-        target_user = msg.reply_to_message.from_user
-    elif context.args and context.args[0].startswith("@"):
-        username = context.args[0][1:].lower()
-        roster = load_roster().get(str(chat.id), {})
-        uid = None
-        for uid_str, info in roster.items():
-            name = str(info.get("name") or "").strip()
-            if name.startswith("@") and name[1:].lower() == username:
-                uid = int(uid_str)
-                break
-        if uid is None:
-            return await msg.reply_text(txt_autoresp_not_found(spooky))
-        member = await context.bot.get_chat_member(chat.id, uid)
-        target_user = member.user
-
-    if not target_user:
-        await msg.reply_text(txt_autoresp_off_usage(spooky))
-        return
-
-    if chat.id in AUTO_RESPONDERS and target_user.id in AUTO_RESPONDERS[chat.id]:
-        del AUTO_RESPONDERS[chat.id][target_user.id]
-        await msg.reply_text(txt_autoresp_off(spooky, target_user.first_name))
-    else:
-        await msg.reply_text(txt_autoresp_none(spooky, target_user.first_name))
-
-# =========================
-# HORA
-_cc = coco.CountryConverter()
-PRIMARY_TZ_BY_ISO2 = {
-    "US": "America/New_York",
-    "CA": "America/Toronto",
-    "BR": "America/Sao_Paulo",
-    "AU": "Australia/Sydney",
-    "RU": "Europe/Moscow",
-    "MX": "America/Mexico_City",
-    "CN": "Asia/Shanghai",
-}
-def _strip_accents(s: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)).strip()
-
-def flag_emoji(cc: str) -> str:
-    cc = cc.upper()
-    if len(cc) != 2 or not cc.isalpha():
-        return "🏳️"
-    return "".join(chr(0x1F1E6 + ord(c) - ord('A')) for c in cc)
-
-def resolve_country_to_iso2_and_name(q: str | None) -> tuple[str, str] | None:
-    if not q:
-        return ("ES", "España")
-    q = _strip_accents(q).lower()
-    for junk in (" de ", " del ", " la ", " el "):
-        q = q.replace(junk, " ")
-    q = " ".join(q.split())
-    iso2 = _cc.convert(names=q, to="ISO2", not_found=None)
-    if not iso2 or iso2 == "not found":
-        return None
-    pretty = _cc.convert(names=iso2, src="ISO2", to="name_short")
-    if not pretty or pretty == "not found":
-        pretty = iso2
-    return (iso2, pretty)
-
-def pick_timezone_for_country(iso2: str) -> str:
-    iso2 = iso2.upper()
-    if iso2 in PRIMARY_TZ_BY_ISO2:
-        return PRIMARY_TZ_BY_ISO2[iso2]
-    tzs = pytz.country_timezones.get(iso2)
-    if not tzs:
-        return "Europe/Madrid"
-    return tzs[0]
-
-def format_time_in_tz(tz: str) -> str:
-    now = datetime.now(ZoneInfo(tz))
-    return now.strftime("%H:%M:%S")
-
-async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    spooky = is_spooky(msg.chat.id)
-    query = " ".join(context.args).strip() if context.args else None
-    resolved = resolve_country_to_iso2_and_name(query)
-    if not resolved:
-        return await msg.reply_text(txt_hora_unknown(spooky))
-    iso2, country_name = resolved
-    tz = pick_timezone_for_country(iso2)
-    flag = flag_emoji(iso2)
-    hhmmss = format_time_in_tz(tz)
-    await msg.reply_text(txt_hora_line(spooky, flag, country_name, hhmmss))
-
-async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text:
-        return
-    spooky = is_spooky(msg.chat.id)
-    m = re.match(r"(?is)^\s*hora\b(.*)$", msg.text.strip())
-    if not m:
-        return
-    query = m.group(1).strip() or None
-    resolved = resolve_country_to_iso2_and_name(query)
-    if not resolved:
-        return await msg.reply_text(txt_hora_unknown(spooky))
-    iso2, country_name = resolved
-    tz = pick_timezone_for_country(iso2)
-    flag = flag_emoji(iso2)
-    hhmmss = format_time_in_tz(tz)
-    await msg.reply_text(txt_hora_line(spooky, flag, country_name, hhmmss))
-
-# =========================
-# @ALL
-async def _check_all_permissions(context, chat_id: int, user_id: int) -> tuple[bool, str]:
-    spooky = is_spooky(chat_id)
-    if not await is_admin(context, chat_id, user_id):
-        return False, txt_all_perm(spooky)
-    cfg = get_chat_settings(chat_id)
-    if not cfg.get("all_enabled", True):
-        return False, txt_all_disabled(spooky)
-    cd = cfg.get("all_cooldown_sec", 60)
-    if _last_all.get(chat_id) and time.time() - _last_all[chat_id] < cd:
-        return False, txt_all_cooldown(spooky)
-    return True, ""
-
-async def execute_all(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
-    spooky = is_spooky(chat.id)
-    await prune_roster(chat.id, context)
-    members = get_chat_roster(chat.id)
-    if not members:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_users(spooky))
-        return
-    parts = build_mentions_html(members)
-    if not parts:
-        await context.bot.send_message(chat_id=chat.id, text=txt_no_targets(spooky))
-        return
-
-    header = txt_all_header(spooky, by_user.first_name, extra)
-    try:
-        await context.bot.send_message(chat_id=chat.id, text=header)
-    except Exception as e:
-        logging.exception("Fallo cabecera @all", exc_info=e)
-
-    motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
-    for block in parts:
-        try:
-            body = block + motivo_html
-            await context.bot.send_message(chat_id=chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
-            await asyncio.sleep(0.3)
-        except Exception:
-            logging.exception("Fallo bloque @all")
-    _last_all[chat.id] = time.time()
-
-async def confirm_all(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
-    spooky = is_spooky(chat_id)
-    data_yes = f"allconfirm:{chat_id}:yes:{initiator_id}"
-    data_no = f"allconfirm:{chat_id}:no:{initiator_id}"
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
-    ])
-
-async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    chat_id = q.message.chat.id
-    spooky = is_spooky(chat_id)
-    await safe_q_answer(q)
-    try:
-        _, cid, action, initiator = q.data.split(":")
-        cid = int(cid)
-        initiator = int(initiator)
-    except Exception:
-        return await q.edit_message_text(txt_all_confirm_bad(spooky))
-    if q.from_user.id != initiator:
-        return await q.reply_text(txt_only_initiator(spooky))
-    if action == "yes":
-        extra = context.user_data.get("pending_all", "")
-        await q.edit_message_text(txt_sending_mentions(spooky))
-        chat = await context.bot.get_chat(cid)
-        await execute_all(chat, context, extra, q.from_user)
-        context.user_data.pop("pending_all", None)
-    else:
-        context.user_data.pop("pending_all", None)
-        await q.edit_message_text(txt_canceled(spooky))
-
-async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    # SOLO ADMIN
-    if not await is_admin(context, msg.chat.id, msg.from_user.id):
-        return await msg.reply_text("Este comando es solo para administradores.")
-    spooky = is_spooky(msg.chat.id)
-    context.user_data.pop("pending_all", None)
-    context.user_data.pop("pending_admin", None)
-    await msg.reply_text(txt_cancel_cmd(spooky))
-
-async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    chat = msg.chat
-    user = msg.from_user
-    text = msg.text
-    extra = text.split(" ", 1)[1] if " " in text else ""
-    ok, why = await _check_all_permissions(context, chat.id, user.id)
-    if not ok:
-        return await msg.reply_text(why)
-    cfg = get_chat_settings(chat.id)
-    if cfg.get("all_confirm", True):
-        kb = await confirm_all(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_all_confirm(is_spooky(chat.id)), reply_markup=kb)
-        context.user_data["pending_all"] = extra
-        return
-    await execute_all(chat, context, extra, user)
-
-async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text or (msg.from_user and msg.from_user.is_bot):
-        return
-    t = msg.text.strip()
-    if not t.lower().startswith("@all"):
-        return
-    chat = msg.chat
-    user = msg.from_user
-    extra = t[4:].lstrip()
-    ok, why = await _check_all_permissions(context, chat.id, user.id)
-    if not ok:
-        return await msg.reply_text(why)
-    cfg = get_chat_settings(chat.id)
-    if cfg.get("all_confirm", True):
-        kb = await confirm_all(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_all_confirm(is_spooky(chat.id)), reply_markup=kb)
-        context.user_data["pending_all"] = extra
-        return
-    await execute_all(chat, context, extra, user)
-
-# =========================
-# @ADMIN
-async def _check_admin_ping_permissions(context, chat_id: int) -> tuple[bool, str]:
-    spooky = is_spooky(chat_id)
-    cfg = get_chat_settings(chat_id)
-    if not cfg.get("admin_enabled", True):
-        return False, txt_admin_disabled(spooky)
-    cd = cfg.get("admin_cooldown_sec", 60)
-    if _admin_last.get(chat_id) and time.time() - _admin_last[chat_id] < cd:
-        return False, txt_admin_cooldown(spooky)
-    return True, ""
-
-async def _get_admin_members(chat, context: ContextTypes.DEFAULT_TYPE) -> List[dict]:
-    try:
-        admins = await context.bot.get_chat_administrators(chat.id)
-    except Exception:
-        return []
-    out, seen = [], set()
-    for cm in admins:
-        u = cm.user
-        if not u or u.is_bot:
-            continue
-        if u.id in seen:
-            continue
-        seen.add(u.id)
-        out.append({"id": u.id, "first_name": u.first_name or (u.username or "Admin")})
-    return out
-
-def _build_mentions_html_from_basic(members: List[dict]) -> List[str]:
-    chunks, batch = [], []
-    for i, u in enumerate(members, 1):
-        uid = u["id"]
-        name = u.get("first_name") or "usuario"
-        mention = f'<a href="tg://user?id={uid}">{html.escape(name)}</a>'
-        batch.append(mention)
-        if i % 20 == 0:
-            chunks.append(", ".join(batch))
-            batch = []
-    if batch:
-        chunks.append(", ".join(batch))
-    return chunks
-
-async def execute_admin(chat, context: ContextTypes.DEFAULT_TYPE, extra: str, by_user):
-    spooky = is_spooky(chat.id)
-    await prune_roster(chat.id, context)  # <-- Pega aquí esta línea
-    admins = await _get_admin_members(chat, context)
-    if not admins:
-        return await context.bot.send_message(chat_id=chat.id, text=txt_no_admins(spooky))
-    parts = _build_mentions_html_from_basic(admins)
-    header = txt_admin_header(spooky, by_user.first_name, extra)
-    try:
-        await context.bot.send_message(chat_id=chat.id, text=header)
-    except Exception:
-        logging.exception("Fallo cabecera @admin")
-    motivo_html = ("\n\n" + txt_motivo_label(spooky) + html.escape(extra)) if extra else ""
-    for block in parts:
-        try:
-            body = block + motivo_html
-            await context.bot.send_message(chat_id=chat.id, text=body, parse_mode="HTML", disable_web_page_preview=True)
-            await asyncio.sleep(0.3)
-        except Exception:
-            logging.exception("Fallo bloque @admin")
-    _admin_last[chat.id] = time.time()
-
-async def confirm_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE, extra: str, initiator_id: int):
-    spooky = is_spooky(chat_id)
-    data_yes = f"adminconfirm:{chat_id}:yes:{initiator_id}"
-    data_no = f"adminconfirm:{chat_id}:no:{initiator_id}"
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(btn_confirm(spooky), callback_data=data_yes),
-         InlineKeyboardButton(btn_cancel(spooky), callback_data=data_no)]
-    ])
-
-async def callback_adminconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    chat_id = q.message.chat.id
-    spooky = is_spooky(chat_id)
-    await safe_q_answer(q)
-    try:
-        _, cid, action, initiator = q.data.split(":")
-        cid = int(cid)
-        initiator = int(initiator)
-    except Exception:
-        return await q.edit_message_text(txt_all_confirm_bad(spooky))
-    if q.from_user.id != initiator:
-        return await q.reply_text(txt_only_initiator(spooky))
-    if action == "yes":
-        extra = context.user_data.get("pending_admin", "")
-        await q.edit_message_text(txt_calling_admins(spooky))
-        chat = await context.bot.get_chat(cid)
-        await execute_admin(chat, context, extra, q.from_user)
-        context.user_data.pop("pending_admin", None)
-    else:
-        context.user_data.pop("pending_admin", None)
-        await q.edit_message_text(txt_canceled(spooky))
-
-async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    chat = msg.chat
-    user = msg.from_user
-    extra = msg.text.split(" ", 1)[1] if " " in msg.text else ""
-    ok, why = await _check_admin_ping_permissions(context, chat.id)
-    if not ok:
-        return await msg.reply_text(why)
-    cfg = get_chat_settings(chat.id)
-    if cfg.get("admin_confirm", True):
-        kb = await confirm_admin(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_admin_confirm(is_spooky(chat.id)), reply_markup=kb)
-        context.user_data["pending_admin"] = extra
-        return
-    await execute_admin(chat, context, extra, user)
-
-async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text or (msg.from_user and msg.from_user.is_bot):
-        return
-    t = msg.text.strip()
-    if not t.lower().startswith("@admin"):
-        return
-    chat = msg.chat
-    user = msg.from_user
-    extra = t[6:].lstrip()
-    ok, why = await _check_admin_ping_permissions(context, chat.id)
-    if not ok:
-        return await msg.reply_text(why)
-    cfg = get_chat_settings(chat.id)
-    if cfg.get("admin_confirm", True):
-        kb = await confirm_admin(chat.id, context, extra, user.id)
-        await msg.reply_text(txt_admin_confirm(is_spooky(chat.id)), reply_markup=kb)
-        context.user_data["pending_admin"] = extra
-        return
-    await execute_admin(chat, context, extra, user)
-
-# =========================
-# ESTADÍSTICAS TRES EN RAYA
-def _ttt_stats_load() -> dict:
-    s = load_settings()
-    return s.setdefault("_ttt_stats", {})
-
-def _ttt_stats_save(stats: dict) -> None:
-    s = load_settings()
-    s["_ttt_stats"] = stats
-    save_settings(s)
-
-def _ttt_stats_bump(chat_id: int, user_id: int, name: str, key: str):
-    stats = _ttt_stats_load()
-    c = stats.setdefault(str(chat_id), {})
-    u = c.setdefault(str(user_id), {"name": name or f"ID {user_id}", "wins": 0, "draws": 0, "losses": 0})
-    u["name"] = name or u["name"]
-    u[key] = int(u.get(key, 0)) + 1
-    _ttt_stats_save(stats)
-
-def _ttt_stats_record_winloss(chat_id: int, winner_id: int, winner_name: str, loser_id: int, loser_name: str):
-    _ttt_stats_bump(chat_id, winner_id, winner_name, "wins")
-    _ttt_stats_bump(chat_id, loser_id, loser_name, "losses")
-
-def _ttt_stats_record_draw(chat_id: int, uid_a: int, name_a: str, uid_b: int, name_b: str):
-    _ttt_stats_bump(chat_id, uid_a, name_a, "draws")
-    _ttt_stats_bump(chat_id, uid_b, name_b, "draws")
-
-def _ttt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
-    metric = metric.lower()
-    if metric not in ("wins", "draws", "losses"):
-        metric = "wins"
-    stats = _ttt_stats_load().get(str(chat_id), {})
-    if not stats:
-        return "Aún no hay partidas registradas en este chat."
-    rows = []
-    for uid, rec in stats.items():
-        rows.append((int(rec.get(metric, 0)), rec.get("name", f"ID {uid}"), int(uid)))
-    rows.sort(key=lambda x: x[0], reverse=True)
-    rows = rows[:limit]
-    title = {"wins": "🏆 Top victorias", "draws": "🤝 Top empates", "losses": "💀 Top derrotas"}[metric]
-    out = [f"{title} — Tres en raya"]
-    for i, (val, name, _uid) in enumerate(rows, start=1):
-        out.append(f"{i}. {name} — {val}")
-    return "\n".join(out)
-
-# register detector in main manually
-
-# =========================
-# TRES EN RAYA (handlers)
-def _ttt_get_game(chat_id: int, msg_id: int) -> Dict[str, Any] | None:
-    return TTT_GAMES.get(chat_id, {}).get(msg_id)
-
-def _ttt_set_game(chat_id: int, msg_id: int, data: Dict[str, Any]) -> None:
-    TTT_GAMES.setdefault(chat_id, {})[msg_id] = data
-
-def _ttt_del_game(chat_id: int, msg_id: int) -> None:
-    if chat_id in TTT_GAMES and msg_id in TTT_GAMES[chat_id]:
-        del TTT_GAMES[chat_id][msg_id]
-        if not TTT_GAMES[chat_id]:
-            del TTT_GAMES[chat_id]
-
-def _ttt_new_board() -> list[str]:
-    return [TTT_EMPTY] * 9
-
-def _ttt_winner(board: list[str]) -> str | None:
-    wins = [
-        (0, 1, 2), (3, 4, 5), (6, 7, 8),
-        (0, 3, 6), (1, 4, 7), (2, 5, 8),
-        (0, 4, 8), (2, 4, 6)
-    ]
-    for a, b, c in wins:
-        if board[a] != TTT_EMPTY and board[a] == board[b] == board[c]:
-            return board[a]
-    return None
-
-def _ttt_full(board: list[str]) -> bool:
-    return all(c != TTT_EMPTY for c in board)
-
-def _ttt_board_markup(chat_id: int, msg_id: int, board: list[str], playing: bool) -> InlineKeyboardMarkup:
-    rows = []
-    for r in range(3):
-        btns = []
-        for c in range(3):
-            idx = r * 3 + c
-            label = board[idx]
-            if label == TTT_EMPTY and playing:
-                cb = f"ttt:play:{chat_id}:{msg_id}:{idx}"
-            else:
-                cb = f"ttt:nop:{chat_id}:{msg_id}:{idx}"
-            btns.append(InlineKeyboardButton(label, callback_data=cb))
-        rows.append(btns)
-    return InlineKeyboardMarkup(rows)
-
-def _ttt_header_text(spooky: bool, state: Dict[str, Any]) -> str:
-    pX = state["players"].get("X_name", "X")
-    pO = state["players"].get("O_name", "O")
-    turn = state.get("turn", "X")
-    status = state.get("status")
-    if status == "waiting":
-        return ("🎃 " if spooky else "") + f"Tres en raya — Esperando oponente…\n{pX} juega con {TTT_X}."
-    if status == "playing":
-        arrow = "🦇" if spooky else "➡️"
-        now = pX if turn == "X" else pO
-        return ("👻 " if spooky else "") + f"Tres en raya — Turno de {now} {arrow}"
-    if status == "ended":
-        result = state.get("result", "fin de partida")
-        return ("🕯️ " if spooky else "") + f"Tres en raya — {result}"
-    return "Tres en raya"
-
-def _ttt_footer_markup(chat_id: int, msg_id: int, state: Dict[str, Any]) -> InlineKeyboardMarkup:
-    buttons = []
-    if state["status"] == "waiting":
-        buttons.append([InlineKeyboardButton("Unirme", callback_data=f"ttt:join:{chat_id}:{msg_id}")])
-        buttons.append([InlineKeyboardButton("Cancelar", callback_data=f"ttt:cancel:{chat_id}:{msg_id}")])
-    elif state["status"] == "ended":
-        buttons.append([InlineKeyboardButton("Nueva partida", callback_data=f"ttt:rematch:{chat_id}:{msg_id}")])
-
-    board_kb = _ttt_board_markup(chat_id, msg_id, state["board"], state["status"] == "playing")
-    all_rows = [list(row) for row in board_kb.inline_keyboard]
-    all_rows.extend(buttons)
-    return InlineKeyboardMarkup(all_rows)
-
-def _ttt_can_play(state: Dict[str, Any], user_id: int) -> bool:
-    if state["status"] != "playing":
-        return False
-    symbol = state["turn"]
-    pid = state["players"].get(f"{symbol}_id")
-    return pid == user_id
-
-async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    /ttt  o  /tres
-    - Si respondes a un mensaje, desafías a ese usuario.
-    - Si pasas @usuario en args, reto directo.
-    - Si no, partida abierta (botón Unirme).
-    """
-    msg = update.message
-    chat = msg.chat
-
-    # Respect module toggle
-    if not is_module_enabled(chat.id, "ttt_enabled"):
-        return await msg.reply_text("El módulo TTT está desactivado en este chat.")
-
-    spooky = is_spooky(chat.id)
-
-    pX = msg.from_user
-    opponent_id = None
-    opponent_name = None
-
-    if msg.reply_to_message and msg.reply_to_message.from_user and msg.reply_to_message.from_user.id != pX.id:
-        opponent_id = msg.reply_to_message.from_user.id
-        opponent_name = msg.reply_to_message.from_user.first_name
-    elif context.args and context.args[0].startswith("@"):
-        username = context.args[0][1:].lower()
-        roster = load_roster().get(str(chat.id), {})
-        uid = None
-        for uid_str, info in roster.items():
-            name = str(info.get("name") or "").strip()
-            if name.startswith("@") and name[1:].lower() == username:
-                uid = int(uid_str)
-                break
-        if uid:
-            member = await context.bot.get_chat_member(chat.id, uid)
-            opponent_id = member.user.id
-            opponent_name = member.user.first_name
-
-    state = {
-        "board": _ttt_new_board(),
-        "status": "waiting",
-        "turn": "X",
-        "players": {
-            "X_id": pX.id,
-            "X_name": pX.first_name,
-            "O_id": opponent_id,
-            "O_name": opponent_name,
-        },
-        "created_ts": time.time()
-    }
-
-    text = _ttt_header_text(spooky, state)
-
-    # Envia sin teclado para obtener message_id real (evita msg_id=0)
-    sent = await context.bot.send_message(chat_id=chat.id, text=text)
-
-    # Guarda estado con el message_id correcto
-    _ttt_set_game(chat.id, sent.message_id, state)
-
-    # Si había oponente, arranca directamente
-    if opponent_id and opponent_id != pX.id:
-        state["status"] = "playing"
-        state["turn"] = random.choice(["X", "O"])
-        _ttt_set_game(chat.id, sent.message_id, state)
-
-    # Ahora sí, añade teclado con msg_id real
-    kb = _ttt_footer_markup(chat.id, sent.message_id, state)
-    await sent.edit_text(_ttt_header_text(spooky, state), reply_markup=kb)
-
-async def ttt_join_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
-    q = update.callback_query
-    user = q.from_user
-    spooky = is_spooky(chat_id)
-    state = _ttt_get_game(chat_id, msg_id)
-    if not state:
-        return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
-    if state["status"] != "waiting":
-        return await safe_q_answer(q, "Esta partida ya comenzó.", show_alert=True)
-    if state["players"].get("O_id") and state["players"]["O_id"] != user.id:
-        return await safe_q_answer(q, "Esta partida era un reto a otra persona.", show_alert=True)
-    if state["players"]["X_id"] == user.id:
-        return await safe_q_answer(q, "No puedes ser tu propio oponente 😅", show_alert=True)
-
-    state["players"]["O_id"] = user.id
-    state["players"]["O_name"] = user.first_name
-    state["status"] = "playing"
-    state["turn"] = random.choice(["X", "O"])
-    _ttt_set_game(chat_id, msg_id, state)
-
-    await safe_q_answer(q, "¡Partida iniciada!")
-    await q.edit_message_text(_ttt_header_text(spooky, state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
-
-async def ttt_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
-    q = update.callback_query
-    user = q.from_user
-    spooky = is_spooky(chat_id)
-    state = _ttt_get_game(chat_id, msg_id)
-    if not state:
-        return await safe_q_answer(q, "Nada que cancelar.", show_alert=True)
-    if state["status"] == "waiting":
-        if user.id != state["players"]["X_id"] and not await is_admin(context, chat_id, user.id):
-            return await safe_q_answer(q, "No puedes cancelar esta partida.", show_alert=True)
-        _ttt_del_game(chat_id, msg_id)
-        await safe_q_answer(q)
-        return await q.edit_message_text("❌ Partida cancelada." if spooky else "❌ Partida cancelada.")
-    return await safe_q_answer(q, "La partida ya está en curso.", show_alert=True)
-
-async def ttt_rematch_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
-    q = update.callback_query
-    spooky = is_spooky(chat_id)
-    old = _ttt_get_game(chat_id, msg_id)
-    if not old:
-        return await safe_q_answer(q, "No hay partida para reiniciar.", show_alert=True)
-    new_state = {
-        "board": _ttt_new_board(),
-        "status": "playing",
-        "turn": random.choice(["X", "O"]),
-        "players": {
-            "X_id": old["players"]["O_id"],
-            "X_name": old["players"]["O_name"],
-            "O_id": old["players"]["X_id"],
-            "O_name": old["players"]["X_name"],
-        },
-        "created_ts": time.time()
-    }
-    _ttt_set_game(chat_id, msg_id, new_state)
-    await safe_q_answer(q, "¡Nueva partida!")
-    await q.edit_message_text(_ttt_header_text(spooky, new_state), reply_markup=_ttt_footer_markup(chat_id, msg_id, new_state))
-
-async def ttt_play_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int, idx: int):
-    q = update.callback_query
-    user = q.from_user
-    spooky = is_spooky(chat_id)
-    state = _ttt_get_game(chat_id, msg_id)
-    if not state:
-        return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
-    if state["status"] != "playing":
-        return await safe_q_answer(q, "La partida no está disponible.", show_alert=True)
-    if not _ttt_can_play(state, user.id):
-        return await safe_q_answer(q, "No es tu turno.", show_alert=True)
-
-    board = state["board"]
-    if board[idx] != TTT_EMPTY:
-        return await safe_q_answer(q, "Esa casilla ya está ocupada.", show_alert=True)
-
-    symbol = TTT_X if state["turn"] == "X" else TTT_O
-    board[idx] = symbol
-
-    winner = _ttt_winner(board)
-    if winner:
-        px = state["players"]["X_name"]
-        po = state["players"]["O_name"]
-        x_id = state["players"]["X_id"]
-        o_id = state["players"]["O_id"]
-        if winner == TTT_X:
-            ganador, ganador_id = px, x_id
-            perdedor, perdedor_id = po, o_id
-        else:
-            ganador, ganador_id = po, o_id
-            perdedor, perdedor_id = px, x_id
-        state["status"] = "ended"
-        state["result"] = f"¡{ganador} ha ganado!"
-        if ganador_id and perdedor_id:
-            _ttt_stats_record_winloss(chat_id, ganador_id, ganador or "Jugador", perdedor_id, perdedor or "Jugador")
-    elif _ttt_full(board):
-        px = state["players"]["X_name"]
-        po = state["players"]["O_name"]
-        x_id = state["players"]["X_id"]
-        o_id = state["players"]["O_id"]
-        state["status"] = "ended"
-        state["result"] = "Empate. Buen duelo."
-        if x_id and o_id:
-            _ttt_stats_record_draw(chat_id, x_id, px or "Jugador X", o_id, po or "Jugador O")
-    else:
-        state["turn"] = "O" if state["turn"] == "X" else "X"
-
-    _ttt_set_game(chat_id, msg_id, state)
-    await safe_q_answer(q)
-    await q.edit_message_text(_ttt_header_text(spooky, state), reply_markup=_ttt_footer_markup(chat_id, msg_id, state))
-
-# router callbacks del TTT
-async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    try:
-        parts = q.data.split(":")
-        if parts[0] != "ttt":
-            return await safe_q_answer(q)
-        action = parts[1]
-        chat_id = int(parts[2])
-        msg_id = int(parts[3])
-
-        # Denegar callbacks si el módulo está desactivado
-        if not is_module_enabled(chat_id, "ttt_enabled"):
-            return await safe_q_answer(q, "El módulo TTT está desactivado en este chat.", show_alert=True)
-
-        if action == "play":
-            idx = int(parts[4])
-            return await ttt_play_cb(update, context, chat_id, msg_id, idx)
-        elif action == "join":
-            return await ttt_join_cb(update, context, chat_id, msg_id)
-        elif action == "cancel":
-            return await ttt_cancel_cb(update, context, chat_id, msg_id)
-        elif action == "rematch":
-            return await ttt_rematch_cb(update, context, chat_id, msg_id)
-        else:
-            return await safe_q_answer(q)
-    except Exception:
-        logging.exception("ttt router error")
-        try:
-            await safe_q_answer(q, "Error en la jugada.", show_alert=True)
-        except Exception:
-            pass
-
-# =========================
-# TOP TTT
-async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    /top_ttt [wins|draws|losses]
-    Muestra el ranking del chat para la métrica indicada (por defecto: wins).
-    """
-    msg = update.message
-    metric = (context.args[0].lower() if context.args else "wins")
-    await context.bot.send_message(chat_id=msg.chat.id, text=_ttt_stats_top(msg.chat.id, metric))
-
-# =========================
-# ON MESSAGE
-async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.from_user or not msg.text:
-        return
-    chat = msg.chat
-    user = msg.from_user
-
-    try:
-        cfg = _with_defaults(get_chat_settings(chat.id))
-        if cfg.get("notify_name_change", False):
-            changes = _detect_name_changes(chat.id, user)
-            if changes.get("changed"):
-                parts = []
-                mention = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name or "usuario")}</a>'
-                if changes.get("old_first") != changes.get("new_first"):
-                    old = html.escape(changes.get("old_first") or "—")
-                    new = html.escape(changes.get("new_first") or "—")
-                    parts.append(f"🪪 {mention} ha cambiado su nombre: <b>{old}</b> → <b>{new}</b>")
-                if changes.get("old_user") != changes.get("new_user"):
-                    oldu = ("@" + changes.get("old_user")) if changes.get("old_user") else "—"
-                    newu = ("@" + changes.get("new_user")) if changes.get("new_user") else "—"
-                    parts.append(f"🔁 Nuevo @usuario: <code>{oldu}</code> → <code>{newu}</code>")
-                if parts:
-                    try:
-                        await context.bot.send_message(
-                            chat_id=chat.id,
-                            text="\n".join(parts),
-                            parse_mode="HTML",
-                            disable_web_page_preview=True
-                        )
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-    # roster
-    upsert_roster_member(chat.id, user)
-    if msg.reply_to_message and msg.reply_to_message.from_user:
-        upsert_roster_member(chat.id, msg.reply_to_message.from_user)
-
-    # evitar doble-proceso tras AFK por texto
-    if context.user_data.get("afk_skip_message_id") == msg.message_id:
-        context.user_data.pop("afk_skip_message_id", None)
-        return
-
-    # avisos AFK a terceros (solo si módulo AFK activado)
-    await notify_if_mentioning_afk(update, context)
-
-    # si quien habla estaba AFK -> retorno (solo si módulo AFK activado)
-    if is_module_enabled(chat.id, "afk_enabled") and user.id in AFK_USERS:
-        info = AFK_USERS.pop(user.id)
-        since = info.get("since")
-        phrase = choose_return_phrase(chat.id).format(first=user.first_name)
-        if since:
-            phrase += (" ⏳ (fuera " if is_spooky(chat.id) else " (fuera ") + format_duration(time.time() - since) + ")"
-        await msg.reply_text(phrase)
-
-    # autoresponder
-    if chat.id in AUTO_RESPONDERS and user.id in AUTO_RESPONDERS[chat.id]:
-        text = AUTO_RESPONDERS[chat.id][user.id]
-        await context.bot.send_message(
-            chat_id=chat.id,
-            text=text,
-            reply_to_message_id=msg.message_id,
-            disable_web_page_preview=True
-        )
-
-# =========================
-# ERROR HANDLER
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logging.exception("Unhandled exception", exc_info=context.error)
-
-# =========================
-# /CONFIG — Panel compacto con toggles
-MODULES: Dict[str, Dict[str, str]] = {
-    "afk": {"key": "afk_enabled", "label": "AFK"},
-    "all": {"key": "all_enabled", "label": "@all"},
-    "admin": {"key": "admin_enabled", "label": "@admin"},
-    "autoresp": {"key": "autoresponder_enabled", "label": "Autoresponder"},
-    "ttt": {"key": "ttt_enabled", "label": "TTT"},
-    "trivia": {"key": "trivia_enabled", "label": "Trivia"},
-    "namechg": {"key": "notify_name_change", "label": "SangMata"},
-}
-
-DEFAULTS: Dict[str, bool] = {
-    "afk_enabled": True,
-    "all_enabled": True,
-    "admin_enabled": True,
-    "autoresponder_enabled": True,
-    "ttt_enabled": True,
-    "trivia_enabled": False,
-    "notify_name_change": False,
-}
-
-# =========================
-# TIKTOK DOWNLOADER (AUTO) - using requests
-import requests
-
-MODULES["tiktok"] = {"key": "tiktok_enabled", "label": "TikTok"}
-DEFAULTS["tiktok_enabled"] = True
-
-def tiktok_downloader(url: str) -> bytes | None:
-    try:
-        # Resolve redirects (vm.tiktok.com -> long URL)
-        real_url = requests.get(url, timeout=15, allow_redirects=True).url
-
-        api = f"https://tikwm.com/api/?url={real_url}"
-        r = requests.get(api, timeout=20)
-        data = r.json()
-        video = data.get("data", {}).get("play")
-        if not video:
-            return None
-
-        vid = requests.get(video, timeout=20)
-        return vid.content
-    except Exception:
-        return None
-
-async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text:
-        return
-    if not is_module_enabled(msg.chat.id, "tiktok_enabled"):
-        return
-    m = re.search(r"(https?://[^\s]*tiktok[^\s]*)", msg.text)
-    if not m:
-        return
-    link = m.group(1)
-    try:
-        await msg.set_reaction("💩")
-    except Exception:
-        pass
-    vid = tiktok_downloader(link)
-    if not vid:
-        await msg.reply_text("No pude descargar el vídeo de TikTok.")
-        return
-    await context.bot.send_video(chat_id=msg.chat.id, video=vid)
-
-def _with_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    out = dict(DEFAULTS)
-    out.update(cfg or {})
-    return out
-
-def build_config_keyboard(chat_id: int) -> InlineKeyboardMarkup:
-    cfg = _with_defaults(get_chat_settings(chat_id))
-
-    def b(mod_code: str) -> InlineKeyboardButton:
-        info = MODULES[mod_code]
-        key = info["key"]
-        label = info["label"]
-        enabled = bool(cfg.get(key, DEFAULTS.get(key, False)))
-        state = "✅" if enabled else "❌"
-        return InlineKeyboardButton(f"{label} {state}", callback_data=f"cfg:t:{mod_code}")
-
-    codes = list(MODULES.keys())
-    rows = []
-    for i in range(0, len(codes), 2):
-        chunk = codes[i:i + 2]
-        rows.append([b(c) for c in chunk])
-
-    rows.append([
-        InlineKeyboardButton("🔄 Refrescar", callback_data="cfg:r"),
-        InlineKeyboardButton("✖️ Cerrar", callback_data="cfg:x"),
-    ])
-    return InlineKeyboardMarkup(rows)
-
-async def _assert_admin_or_warn(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
-    if await is_admin(context, chat_id, user_id):
-        return True
-    try:
-        if update.callback_query:
-            await safe_q_answer(update.callback_query, "Solo administradores.", show_alert=True)
-        elif update.message:
-            await update.message.reply_text("Solo administradores pueden cambiar la configuración.")
-    except Exception:
-        pass
-    return False
+    # Formateo tipo BotFather
+    text = format_commands_list_botfather()
+    await msg.reply_text(text)
 
 async def config_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el panel de configuración interactivo."""
     msg = update.message
     chat = msg.chat
+    # Teclado inline con secciones (hub)
+    keyboard = build_hub_main_keyboard()
+    text = "<b>Configuración del bot</b>\n<i>Ajustes disponibles para este chat:</i>"
+    await msg.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
 
-    if chat.type == ChatType.PRIVATE:
-        return await msg.reply_text("Esta configuración es por chat. Usa /config en el grupo donde seas administrador.")
+async def callback_show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra la lista de comandos (callback del botón 'Volver' en el hub)."""
+    query = update.callback_query
+    text = format_commands_list_botfather()
+    await safe_q_answer(query)
+    await query.edit_message_text(text)
 
-    if not await _assert_admin_or_warn(update, context, chat.id, msg.from_user.id):
+# =========================
+# COMANDOS: AFK
+# =========================
+AFK_TAG = "💤"  # Tag para nombre
+AFK_TIMEOUT = 60 * 60 * 3  # 3 horas
+AFK_MENTION_REFRESH = 5 * 60  # 5 min (cada cuánto se "resetea" la mención)
+
+async def afk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Activa modo AFK (ausente) para el usuario."""
+    msg = update.message
+    user = msg.from_user
+    motivo = " ".join(context.args) if context.args else ""
+    if not user or user.id is None:
         return
-
-    kb = build_config_keyboard(chat.id)
-    title = "⚙️ Configuración del chat\nToca para activar/desactivar módulos. Solo administradores."
-    await msg.reply_text(title, reply_markup=kb)
-
-async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    data = q.data or ""
-    chat = q.message.chat
-    user_id = q.from_user.id
-
-    if not await _assert_admin_or_warn(update, context, chat.id, user_id):
-        return
-
+    # Marcar usuari com AFK amb timestamp
+    AFK_USERS[user.id] = {"ts": time.time(), "motivo": motivo}
+    name = user.full_name
     try:
-        parts = data.split(":", 2)
-        if len(parts) < 2 or parts[0] != "cfg":
-            return
-        action = parts[1]
-
-        if action == "t":
-            mod_code = parts[2]
-            info = MODULES.get(mod_code)
-            if not info:
-                return await safe_q_answer(q, "Módulo desconocido.")
-            key = info["key"]
-            cfg = _with_defaults(get_chat_settings(chat.id))
-            cur = bool(cfg.get(key, DEFAULTS.get(key, False)))
-            set_chat_setting(chat.id, key, not cur)
-            try:
-                await q.message.edit_reply_markup(reply_markup=build_config_keyboard(chat.id))
-            except BadRequest:
-                pass
-            return await safe_q_answer(q, "Guardado.")
-
-        if action == "r":
-            try:
-                await q.message.edit_reply_markup(reply_markup=build_config_keyboard(chat.id))
-            except BadRequest:
-                pass
-            return await safe_q_answer(q, "Actualizado.")
-
-        if action == "x":
-            try:
-                await q.message.edit_reply_markup(reply_markup=None)
-            except BadRequest:
-                pass
-            return await safe_q_answer(q)
-
+        # Afegir tag al nom (només visible per al bot)
+        await msg.chat.set_chat_title(f"{name} {AFK_TAG}")
     except Exception:
-        logging.exception("Error en cfg_callback")
+        # No tots els xats permeten canviar el títol (p. ex. converses privades)
+        pass
+    # Confirmació al propi usuari
+    respuesta = "Estás en modo AFK."
+    if motivo:
+        respuesta += f" Motivo: {motivo}"
+    await msg.reply_text(respuesta)
+
+async def afk_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Detecta missatges de l'usuari per desactivar AFK."""
+    msg = update.message
+    user = msg.from_user
+    if not user or user.id is None:
+        return
+    # Si l'usuari estava marcat com AFK i envia un missatge, el traiem
+    if user.id in AFK_USERS:
+        AFK_USERS.pop(user.id, None)
         try:
-            await safe_q_answer(q, "No se pudo guardar. Inténtalo de nuevo.", show_alert=True)
+            # Treure tag del nom
+            fullname = user.full_name or ""
+            await msg.chat.set_chat_title(fullname)
+        except Exception:
+            pass
+        await msg.reply_text("Has vuelto del modo AFK. ¡Bienvenido de nuevo!")
+
+# =========================
+# COMANDOS: HORA
+# =========================
+# Base de datos de zonas horarias por país
+PAISES_TZ = {
+    # [Listado de países y sus zonas horarias...]
+    "españa": "Europe/Madrid",
+    "spain": "Europe/Madrid",
+    "cat": "Europe/Madrid",
+    "cataluña": "Europe/Madrid",
+    "euskal": "Europe/Madrid",
+    "gal": "Europe/Madrid",
+    "mexico": "America/Mexico_City",
+    "méxico": "America/Mexico_City",
+    "peru": "America/Lima",
+    "usa": "America/New_York",
+    "estados unidos": "America/New_York",
+    "arg": "America/Argentina/Buenos_Aires",
+    "chile": "America/Santiago",
+    "japon": "Asia/Tokyo",
+    "japón": "Asia/Tokyo",
+    # ... (más países)
+}
+
+DEFAULT_TZ = "Europe/Madrid"
+
+async def hora_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra la hora actual en el país indicado (por defecto España)."""
+    msg = update.message
+    chat = msg.chat
+    # Determinar país (target) del argumento
+    if context.args:
+        pais = " ".join(context.args).lower()
+    else:
+        pais = "españa"
+    tz = None
+    if pais in PAISES_TZ:
+        tz = PAISES_TZ[pais]
+    else:
+        # Intentar deducir a partir del nom del país
+        try:
+            # Convertir a código de país de dos lletres
+            country_code = coco.convert(names=[pais], to='ISO2', not_found=None)
+            if country_code:
+                tz = pytz.country_timezones(country_code)[0]
+        except Exception:
+            tz = None
+    if not tz:
+        await msg.reply_text(f"No reconozco “{pais}”. Prueba con otro país o código.")
+        return
+    # Obtenir hora actual
+    tzinfo = pytz.timezone(tz)
+    ahora = datetime.now(tzinfo)
+    hora_formateada = ahora.strftime("%H:%M:%S")
+    await msg.reply_text(f"Hora en {pais.title()}: {hora_formateada}")
+
+async def hora_text_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Responde a frases tipo 'hora [país]?'."""
+    msg = update.message
+    text = msg.text or ""
+    # Tractar de trobar una paraula que coincideixi amb algun país conegut
+    palabras = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ]+", text.lower())
+    pais = None
+    for palabra in palabras:
+        if palabra in PAISES_TZ:
+            pais = palabra
+            break
+    if not pais:
+        return  # no s'ha trobat cap país
+    tz = PAISES_TZ[pais]
+    tzinfo = pytz.timezone(tz)
+    ahora = datetime.now(tzinfo)
+    hora_formateada = ahora.strftime("%H:%M:%S")
+    await msg.reply_text(f"Hora en {pais.title()}: {hora_formateada}")
+
+# =========================
+# COMANDOS: AUTORESPONDER
+# =========================
+async def autoresponder_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Activa un auto-respuesta para un usuario (admin only)."""
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    if not user or user.id is None:
+        return
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo un administrador puede usar este comando.")
+        return
+    if len(context.args) < 2:
+        await msg.reply_text("Uso: /autoresponder @usuario texto de respuesta")
+        return
+    target_username = context.args[0].lstrip("@")
+    respuesta = " ".join(context.args[1:])
+    if not respuesta:
+        await msg.reply_text("Debes especificar el texto de respuesta.")
+        return
+    # Buscar miembro del chat por username
+    try:
+        miembro = await chat.get_member(user_id=int(target_username))
+    except ValueError:
+        miembro = await chat.get_member(user_id=target_username)
+    except Exception:
+        miembro = None
+    if not miembro:
+        await msg.reply_text("Usuario no encontrado en el chat.")
+        return
+    target_id = miembro.user.id
+    if chat.id not in AUTO_RESPONDERS:
+        AUTO_RESPONDERS[chat.id] = {}
+    AUTO_RESPONDERS[chat.id][target_id] = respuesta
+    await msg.reply_text(f"Auto-respuesta activada para @{target_username}.")
+
+async def autoresponder_off_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Desactiva el autoresponder de un usuario (admin only)."""
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    if not user or user.id is None:
+        return
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo un administrador puede usar este comando.")
+        return
+    if len(context.args) < 1:
+        await msg.reply_text("Uso: /autoresponder_off @usuario")
+        return
+    target_username = context.args[0].lstrip("@")
+    # Buscar miembro del chat per username
+    try:
+        miembro = await chat.get_member(user_id=int(target_username))
+    except ValueError:
+        miembro = await chat.get_member(user_id=target_username)
+    except Exception:
+        miembro = None
+    if not miembro:
+        await msg.reply_text("Usuario no encontrado en el chat.")
+        return
+    target_id = miembro.user.id
+    if chat.id in AUTO_RESPONDERS and target_id in AUTO_RESPONDERS[chat.id]:
+        AUTO_RESPONDERS[chat.id].pop(target_id, None)
+        await msg.reply_text(f"Auto-respuesta desactivada para @{target_username}.")
+    else:
+        await msg.reply_text(f"No hay auto-respuesta activa para @{target_username}.")
+
+# Handler para detectar mensajes y aplicar autoresponder si corresponde
+async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Revisa cada mensaje por si debe responder automáticamente."""
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    if not user or user.id is None or chat.id is None:
+        return
+    # Comprobar si hay una auto-respuesta configurada para aquest usuari
+    if chat.id in AUTO_RESPONDERS and user.id in AUTO_RESPONDERS[chat.id]:
+        respuesta = AUTO_RESPONDERS[chat.id][user.id]
+        try:
+            # Responder al mensaje original del usuario
+            await msg.reply_text(respuesta)
         except Exception:
             pass
 
 # =========================
-# /START — HUB en privado
-HUB_MODULES = {
-    "afk": {"title": "AFK", "desc": "Activa el modo ausente con un mensaje automático y aviso al volver.", "cmds": ["afk [motivo]"]},
-    "all": {"title": "@all", "desc": "Menciona a todos los miembros del grupo con control anti-spam.", "cmds": ["@all [motivo]"]},
-    "admin": {"title": "@admin", "desc": "Avisa solo al equipo de administradores.", "cmds": ["@admin [motivo]"]},
-    "autoresp": {"title": "Autoresponder", "desc": "Respuestas automáticas personalizadas por usuario.", "cmds": ["autoresponder", "autoresponder_off"]},
-    "ttt": {"title": "Tres en raya", "desc": "Juega partidas de TTT con el grupo y consulta clasificaciones.", "cmds": ["ttt", "top_ttt"]},
-    "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_on", "trivia_off", "trivia_stats"]},
-    "namechg": {"title": "SangMata", "desc": "Notifica cambios de nombre y @ cuando la persona habla en el grupo.", "cmds": []},
-}
+# COMANDOS: @ALL i @ADMIN
+# =========================
+ALL_COOLDOWN = 5 * 60  # 5 minutos entre usos de @all
+ALL_TIMEOUT = 30  # 30 segundos para confirmar @all
+ADMIN_COOLDOWN = 5 * 60  # 5 minutos entre usos de @admin
+ADMIN_TIMEOUT = 30  # 30 segundos para confirmar @admin
 
-def build_hub_keyboard() -> InlineKeyboardMarkup:
-    codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg"]
-    rows = []
-    for i in range(0, len(codes), 2):
-        chunk = codes[i:i + 2]
-        rows.append([InlineKeyboardButton(HUB_MODULES[c]["title"], callback_data=f"hub:m:{c}") for c in chunk])
-    rows.append([InlineKeyboardButton("⚙️ Configuración", callback_data="hub:cfg"), InlineKeyboardButton("📜 Ver comandos", callback_data="hub:help")])
-    rows.append([InlineKeyboardButton("❌ Cerrar", callback_data="hub:x")])
-    return InlineKeyboardMarkup(rows)
+async def all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menciona a todos los miembros del grupo (admin only)."""
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    motivo = " ".join(context.args) if context.args else ""
+    if not user or user.id is None:
+        return
+    # Comprobar permisos de admin
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo los administradores pueden usar este comando.")
+        return
+    # Cooldown por chat
+    last = _last_all.get(chat.id)
+    ahora = time.time()
+    if last and (ahora - last) < ALL_COOLDOWN:
+        await msg.reply_text("Espera antes de volver a usar /all.")
+        return
+    _last_all[chat.id] = ahora
+    # Construir mensaje mencionando a todos
+    miembros = await chat.get_members() if hasattr(chat, "get_members") else []
+    menciones = " ".join(_name(m.user) for m in miembros if m.user)
+    texto = f"📢 @all {motivo}\n{menciones}"
+    # Enviar con confirmación (botón de cancelar)
+    teclado = InlineKeyboardMarkup.from_button(
+        InlineKeyboardButton("Cancelar", callback_data="allconfirm:cancel")
+    )
+    sent = await msg.reply_text(texto, reply_markup=teclado)
+    # Guardar estado de confirmación
+    _admin_last[chat.id] = {"tipo": "all", "msg_id": sent.message_id}
 
-def hub_module_text(code: str) -> str:
-    m = HUB_MODULES.get(code)
-    if not m:
-        return "Módulo desconocido."
-    title = m["title"]
-    desc = m["desc"]
-    cmds = m.get("cmds", [])
-    lines = [f"🔹 <b>{title}</b>", desc]
-    if cmds:
-        lines.append("\n<b>Comandos:</b>")
-        for c in cmds:
-            cfmt = f"/{c}" if not c.startswith('@') and not c.startswith('/') else c
-            lines.append(f"• {cfmt}")
-    lines.append("\nActívalo o desactívalo desde /config en tu grupo.")
-    return "\n".join(lines)
-
-def build_hub_module_keyboard(code: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Volver", callback_data="hub:back")],
-        [InlineKeyboardButton("⚙️ Configuración", callback_data="hub:cfg"), InlineKeyboardButton("📜 Ver comandos", callback_data="hub:help")],
-        [InlineKeyboardButton("❌ Cerrar", callback_data="hub:x")],
-    ])
-
-async def _hub_edit_message(q, text: str, reply_markup=None, parse_mode=None, disable_web_page_preview=None):
-    try:
-        if q.message and getattr(q.message, "photo", None):
-            return await q.message.edit_caption(caption=text, reply_markup=reply_markup, parse_mode=parse_mode)
-        else:
-            return await q.message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
-    except Exception:
+async def callback_allconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback para confirmar o cancelar la mención @all."""
+    query = update.callback_query
+    data = query.data.split(":", 1)
+    if len(data) != 2:
+        return
+    action = data[1]
+    if action == "cancel":
+        # Cancel·lar acció pendent
+        await safe_q_answer(query, "Mención @all cancelada.", show_alert=True)
+        # Treure teclat de confirmació
         try:
-            return await q.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
+            await query.edit_message_reply_markup(reply_markup=None)
         except Exception:
             pass
+        return
+
+async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menciona solo a los administradores (admin only)."""
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    motivo = " ".join(context.args) if context.args else ""
+    if not user or user.id is None:
+        return
+    # Comprobar permisos d'admin
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo los administradores pueden usar este comando.")
+        return
+    # Cooldown por chat
+    last = _admin_last.get(chat.id)
+    ahora = time.time()
+    if last and (ahora - last.get("ts", 0)) < ADMIN_COOLDOWN:
+        await msg.reply_text("Espera antes de volver a usar /admin.")
+        return
+    # Mencionar admins
+    admins = [member.user for member in (await chat.get_administrators())]
+    menciones = " ".join(_name(admin) for admin in admins if admin)
+    texto = f"🔔 @admin {motivo}\n{menciones}"
+    # Enviar con confirmació (botó de cancelar)
+    teclado = InlineKeyboardMarkup.from_button(
+        InlineKeyboardButton("Cancelar", callback_data="adminconfirm:cancel")
+    )
+    sent = await msg.reply_text(texto, reply_markup=teclado)
+    # Guardar estado de confirmación
+    _admin_last[chat.id] = {"tipo": "admin", "ts": time.time(), "msg_id": sent.message_id}
+
+async def callback_adminconfirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback para confirmar o cancelar la mención @admin."""
+    query = update.callback_query
+    data = query.data.split(":", 1)
+    if len(data) != 2:
+        return
+    action = data[1]
+    if action == "cancel":
+        # Cancel·lar acció pendent
+        await safe_q_answer(query, "Mención @admin cancelada.", show_alert=True)
+        # Treure teclat de confirmació
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+
+async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancela una acción pendiente de confirmación (@all o @admin)."""
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    if not user or user.id is None:
+        return
+    # Només admin
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo los administradores pueden usar este comando.")
+        return
+    # Determinar si hi ha alguna confirmació pendent en aquest xat
+    pending = _admin_last.get(chat.id)
+    if not pending:
+        await msg.reply_text("No hay acciones pendientes para cancelar.")
+        return
+    tipo = pending.get("tipo")
+    msg_id = pending.get("msg_id")
+    # Esborrem el missatge original si existeix
+    try:
+        if msg_id:
+            await context.bot.delete_message(chat.id, msg_id)
+    except Exception:
+        pass
+    _admin_last.pop(chat.id, None)
+    if tipo == "all":
+        await msg.reply_text("Mención @all cancelada.")
+    elif tipo == "admin":
+        await msg.reply_text("Mención @admin cancelada.")
+    else:
+        await msg.reply_text("No hay acciones pendientes para cancelar.")
+
+async def mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Detecta @all en texto libre para forzar confirmación."""
+    msg = update.message
+    user = msg.from_user
+    chat = msg.chat
+    if not user or user.id is None or chat.id is None:
+        return
+    # Si un usuari envia '@all' sense fer servir el comandament, l'hi avisem
+    if "@all" in (msg.text or ""):
+        await msg.reply_text("Por favor, usa el comando /all para mencionar a todos (con confirmación).")
+
+async def admin_mention_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Detecta @admin en texto libre para forzar confirmación."""
+    msg = update.message
+    user = msg.from_user
+    chat = msg.chat
+    if not user or user.id is None or chat.id is None:
+        return
+    # Si un usuari envia '@admin' sense fer servir el comandament, l'hi avisem
+    if "@admin" in (msg.text or ""):
+        await msg.reply_text("Por favor, usa el comando /admin para mencionar admins (con confirmación).")
+
+# =========================
+# JUEGO: TRES EN RAYA (Tres en ratlla)
+# =========================
+TTT_DEFAULT_SIZE = 3  # tamaño del tablero (3x3)
+TTT_WIN_LENGTH = 3    # longitud de línea para ganar (3 en raya clásico)
+
+def _ttt_new_game() -> Dict[str, Any]:
+    # Crear un nuevo juego de tres en raya vacío
+    board = [[TTT_EMPTY for _ in range(TTT_DEFAULT_SIZE)] for _ in range(TTT_DEFAULT_SIZE)]
+    return {
+        "board": board,
+        "turno": TTT_X,
+        "jugador_x": None,
+        "jugador_o": None,
+        "ganador": None,
+    }
+
+def _ttt_board_to_str(board: List[List[str]]) -> str:
+    # Convertir el tablero a string para mostrar
+    lineas = [" ".join(celda for celda in fila) for fila in board]
+    return "\n".join(lineas)
+
+def _ttt_check_winner(board: List[List[str]]) -> str | None:
+    # Comprobar si hay un ganador en el tablero
+    n = TTT_DEFAULT_SIZE
+    # Comprobar filas y columnas
+    for i in range(n):
+        # Fila i
+        if board[i][0] != TTT_EMPTY and all(board[i][j] == board[i][0] for j in range(1, n)):
+            return board[i][0]
+        # Columna i
+        if board[0][i] != TTT_EMPTY and all(board[j][i] == board[0][i] for j in range(1, n)):
+            return board[0][i]
+    # Comprobar diagonales
+    if board[0][0] != TTT_EMPTY and all(board[i][i] == board[0][0] for i in range(1, n)):
+        return board[0][0]
+    if board[0][n-1] != TTT_EMPTY and all(board[i][n-1-i] == board[0][n-1] for i in range(1, n)):
+        return board[0][n-1]
+    return None
+
+def _ttt_render_game(game: Dict[str, Any]) -> str:
+    tablero = _ttt_board_to_str(game["board"])
+    turno = game["turno"]
+    jugador_x = _name(game["jugador_x"]) if game.get("jugador_x") else "(nadie)"
+    jugador_o = _name(game["jugador_o"]) if game.get("jugador_o") else "(nadie)"
+    ganador = game.get("ganador")
+    texto_ganador = ""
+    if ganador:
+        texto_ganador = f"\n\n🏆 Ganador: {'❌' if ganador == TTT_X else '⭕'} ¡{_name(game['jugador_x'] if ganador == TTT_X else game['jugador_o'])} gana!"
+    return (
+        f"<pre>{tablero}</pre>\n"
+        f"Turno actual: {'❌' if turno == TTT_X else '⭕'}\n"
+        f"Jugador ❌: {jugador_x}\n"
+        f"Jugador ⭕: {jugador_o}"
+        f"{texto_ganador}"
+    )
+
+async def ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia una partida de Tres en Raya (alias /tres)."""
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    if not user or user.id is None or chat.id is None:
+        return
+    # Si ya hay un juego activo en este chat, ignorar
+    juegos_chat = TTT_GAMES.get(chat.id, {})
+    if any(game for game in juegos_chat.values() if game.get("ganador") is None):
+        await msg.reply_text("Ya hay una partida en curso en este chat. Termina la actual antes de iniciar otra.")
+        return
+    # Crear nuevo juego
+    juego = _ttt_new_game()
+    juego["jugador_x"] = user
+    # Guardar juego
+    if chat.id not in TTT_GAMES:
+        TTT_GAMES[chat.id] = {}
+    sent = await msg.reply_text(_ttt_render_game(juego), parse_mode="HTML", reply_markup=build_ttt_keyboard())
+    TTT_GAMES[chat.id][sent.message_id] = juego
+
+async def ttt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Router de callbacks para jugadas de Tres en Raya."""
+    query = update.callback_query
+    data = query.data.split(":")
+    # Formato esperado: "ttt:jugar:x:y"
+    if not data or data[0] != "ttt":
+        return
+    if len(data) < 4:
+        return
+    accion = data[1]
+    if accion != "jugar":
+        return
+    x_str, y_str = data[2], data[3]
+    if not x_str.isdigit() or not y_str.isdigit():
+        return
+    x, y = int(x_str), int(y_str)
+    message = query.message
+    chat = message.chat if message else None
+    user = update.effective_user
+    if not message or not chat or not user:
+        return
+    juegos_chat = TTT_GAMES.get(chat.id, {})
+    juego = juegos_chat.get(message.message_id)
+    if not juego:
+        # Juego finalizado o no encontrado
+        await safe_q_answer(query, "La partida ya no está disponible.", show_alert=True)
+        return
+    ganador = juego.get("ganador")
+    if ganador:
+        # Si la partida ja té guanyador, ignorar jugades addicionals
+        await safe_q_answer(query)
+        return
+    turno_actual = juego["turno"]
+    # Determinar símbolo del usuario (si participa)
+    simbolo_usuario = None
+    if juego.get("jugador_x") and juego["jugador_x"].id == user.id:
+        simbolo_usuario = TTT_X
+    elif juego.get("jugador_o") and juego["jugador_o"].id == user.id:
+        simbolo_usuario = TTT_O
+    # Si el usuario no está asignado, asígnale el símbolo que toca
+    if not simbolo_usuario:
+        if turno_actual == TTT_X:
+            juego["jugador_x"] = user
+            simbolo_usuario = TTT_X
+        else:
+            juego["jugador_o"] = user
+            simbolo_usuario = TTT_O
+    # Comprobar si és el seu torn
+    if simbolo_usuario != turno_actual:
+        await safe_q_answer(query, "¡Espera tu turno!", show_alert=True)
+        return
+    # Realizar la jugada
+    tablero = juego["board"]
+    if tablero[x][y] != TTT_EMPTY:
+        await safe_q_answer(query, "Esa posición ya está ocupada.", show_alert=True)
+        return
+    tablero[x][y] = simbolo_usuario
+    # Comprobar si guanya
+    ganador = _ttt_check_winner(tablero)
+    if ganador:
+        juego["ganador"] = ganador
+    else:
+        # Cambiar turno
+        juego["turno"] = TTT_O if turno_actual == TTT_X else TTT_X
+    # Actualizar mensaje del juego
+    try:
+        await query.edit_message_text(_ttt_render_game(juego), parse_mode="HTML", reply_markup=build_ttt_keyboard())
+    except Exception:
+        pass
+
+# =========================
+# JUEGO: TECLADOS DE TRES EN RAYA
+# =========================
+def build_ttt_keyboard() -> InlineKeyboardMarkup:
+    # Construir un teclado inline 3x3 para jugar Tres en Raya
+    keyboard: List[List[InlineKeyboardButton]] = []
+    for i in range(TTT_DEFAULT_SIZE):
+        fila: List[InlineKeyboardButton] = []
+        for j in range(TTT_DEFAULT_SIZE):
+            boton = InlineKeyboardButton(" ", callback_data=f"ttt:jugar:{i}:{j}")
+            fila.append(boton)
+        keyboard.append(fila)
+    return InlineKeyboardMarkup(keyboard)
+
+# =========================
+# MÓDULO: HUB DE AJUSTES (CONFIG)
+# =========================
+HUB_MODULES: Dict[str, str] = {}  # Clau: codi, Valor: titol
+
+def register_hub_module(code: str, title: str) -> None:
+    HUB_MODULES[code] = title
+
+def build_hub_main_keyboard() -> InlineKeyboardMarkup:
+    # Teclat principal del hub de configuració: un botó per cada mòdul disponible
+    botones = []
+    for codigo, titulo in HUB_MODULES.items():
+        botones.append(InlineKeyboardButton(titulo, callback_data=f"hub:{codigo}"))
+    # Afegir botó per tancar/ocultar
+    botones.append(InlineKeyboardButton("❌ Tancar", callback_data="hub:close"))
+    keyboard = InlineKeyboardMarkup.from_column(botones)
+    return keyboard
+
+def build_hub_module_keyboard(selected: str) -> InlineKeyboardMarkup:
+    # Teclat per als sub-mòduls (es mostra en prémer un botó del hub principal)
+    botones = []
+    for codigo, titulo in HUB_MODULES.items():
+        # Botó de la secció seleccionada actualment
+        if codigo == selected:
+            botones.append(InlineKeyboardButton(f"· {titulo} ·", callback_data=f"hub:{codigo}"))
+        else:
+            botones.append(InlineKeyboardButton(titulo, callback_data=f"hub:{codigo}"))
+    # Afegir botó per tornar enrere
+    botones.append(InlineKeyboardButton("« Volver", callback_data="show_help"))
+    keyboard = InlineKeyboardMarkup.from_column(botones)
+    return keyboard
+
+# =========================
+# COMANDOS: MÓDULOS DE AJUSTES (dinámicos)
+# =========================
+# (Aquí podríamos registrar dinámicamente subcomandos / módulos de configuración adicionales)
+
+# Ejemplo de registro de módulos de configuración:
+register_hub_module("mod1", "Módulo 1")
+register_hub_module("mod2", "Módulo 2")
+# ...
 
 async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    data = q.data or ""
-    await q.answer()
-    if not data.startswith("hub:"):
+    """Router de callbacks para el hub de configuración."""
+    query = update.callback_query
+    data = query.data.split(":", 1)
+    if len(data) != 2:
         return
-    action = data.split(":", 1)[1]
-    if action == "back":
+    action = data[1]
+    # Tancar el hub
+    if action == "close":
+        await safe_q_answer(query)
         try:
-            await _hub_edit_message(q, "Elige un módulo para ver su ayuda:", reply_markup=build_hub_keyboard())
+            # Esborrar teclat (ocultar panel de config)
+            await query.edit_message_reply_markup(reply_markup=None)
         except Exception:
             pass
         return
-    if action == "help":
-        fake_update = Update(update.update_id, message=q.message)
+    # Canviar de mòdul
+    if action in HUB_MODULES:
+        # Carregar text del mòdul (aquí podria anar la lògica específica de cada mòdul)
+        txt = hub_module_text(action)
         try:
-            await help_cmd(fake_update, context)
+            # Editar el missatge per mostrar el contingut del mòdul i el teclat actualitzat
+            await query.edit_message_text(txt, parse_mode="HTML", disable_web_page_preview=True, reply_markup=build_hub_module_keyboard(action))
         except Exception:
             pass
+
+def hub_module_text(code: str) -> str:
+    # Retorna el text que s'ha de mostrar per a un mòdul de config donat.
+    # (En un cas real, possiblement es carregaria des d'una base de dades o es generaria dinàmicament)
+    return f"<b>{HUB_MODULES.get(code, 'Módulo')}</b>\nContenido de la configuración del módulo."
+
+# Handler global per interceptar navegació del hub
+async def cfg_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Intercepta todos los callbacks del hub de configuración."""
+    query = update.callback_query
+    if not query or not query.data:
         return
-    if action == "cfg":
-        try:
-            await q.message.reply_text("Abre /config en el grupo donde seas administrador para activar/desactivar módulos.")
-        except Exception:
-            pass
+    if query.data.startswith("hub:"):
+        # Deixar que hub_router manegi aquests callbacks
         return
-    if action == "x":
-        try:
-            await q.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
-        return
-    if action.startswith("m:"):
-        code = action.split(":", 1)[1]
-        txt = hub_module_text(code)
-        try:
-            await _hub_edit_message(q, txt, parse_mode="HTML", disable_web_page_preview=True, reply_markup=build_hub_module_keyboard(code))
-        except Exception:
-            pass
-        return
+    # Si no és un callback del hub, ignorar
+    return
+
+async def _hub_edit_message(query, text: str, **kwargs):
+    # Wrapper per a edit_message_text que absorbeix excepcions (p.e. si l'usuari es mou de chat)
+    try:
+        return await query.edit_message_text(text, **kwargs)
+    except Exception as e:
+        # Si es produeix un error editant (p.e. missatge esborrat o usuari fora de chat), l'ignorem
+        logging.warning(f"Hub edit failed: {e}")
+        return None
+
+# =========================
+# DESCARGA DE VÍDEOS (TikTok)
+# =========================
+def _download_video(video_id: str, output_path: str) -> bool:
+    # Simulación de descarga de video (TikTok) – Aquí iría la lógica real con API o scraping.
+    try:
+        # Suposadament descarregar el vídeo i guardar-lo a output_path
+        with open(output_path, "wb") as f:
+            f.write(b"SIMULATED VIDEO CONTENT")
+        return True
+    except Exception as e:
+        logging.error(f"Error descargando video {video_id}: {e}")
+        return False
+
+async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Detecta enlaces de TikTok en mensajes de texto y descarga el video."""
+    msg = update.message
+    text = msg.text or ""
+    # Comprobar si el mensaje contiene un enlace de TikTok
+    tiktok_urls = re.findall(r"(https?://(?:www\.)?tiktok\.com/\S+)", text)
+    if not tiktok_urls:
+        return  # No hay enlaces de TikTok
+    await msg.reply_text("Descargando video de TikTok...")
+    for url in tiktok_urls:
+        # Extraer identificador (simulado)
+        video_id = url.split("/")[-1]
+        output_file = os.path.join(PERSIST_DIR, f"{video_id}.mp4")
+        if _download_video(video_id, output_file):
+            try:
+                await msg.reply_video(video=open(output_file, "rb"))
+            except Exception as e:
+                logging.error(f"Error enviando video {video_id}: {e}")
+                await msg.reply_text(f"Error al enviar el video {video_id}.")
+        else:
+            await msg.reply_text(f"Error al descargar el video {video_id}.")
+
+# =========================
+# HANDLER DE ERRORES
+# =========================
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a telegram message to notify the developer."""
+    logging.error(msg="Exception while handling an update:", exc_info=context.error)
+    try:
+        await context.bot.send_message(
+            chat_id=os.getenv("LOG_CHAT_ID", ""),
+            text=f"💥 Se ha producido un error: <code>{html.escape(str(context.error))}</code>",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"Failed to send error log: {e}")
 
 # =========================
 # MAIN
-
+# =========================
 # Added inside main via dynamic injection
 
 def main():
@@ -1865,7 +1026,8 @@ def main():
     # /help dinámico (formato BotFather)
     register_command("start", "muestra el mensaje de bienvenida del bot")
     register_command("help", "lista los comandos disponibles")
-    register_command("config", "abrir panel de configuración del chat", admin=True)    register_command("afk", "activa el modo afk con un motivo opcional")
+    register_command("config", "abrir panel de configuración del chat", admin=True)
+    register_command("afk", "activa el modo afk con un motivo opcional")
     register_command("autoresponder", "activa una respuesta automática para un usuario", admin=True)
     register_command("autoresponder_off", "desactiva el autoresponder de un usuario", admin=True)
     register_command("hora", "muestra la hora actual del país indicado (por defecto españa)")
@@ -1882,4 +1044,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
