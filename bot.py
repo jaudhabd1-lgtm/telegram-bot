@@ -1725,7 +1725,7 @@ async def tiktok_detector(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     link = m.group(1)
     try:
-        await msg.set_reaction("🔄")
+        await msg.set_reaction("💩")
     except Exception:
         pass
     vid = tiktok_downloader(link)
