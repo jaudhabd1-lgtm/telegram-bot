@@ -1678,6 +1678,158 @@ async def trivia_import_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await msg.reply_text(success_msg)
 
+async def trivia_pool_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /trivia_pool - View current trivia pool information.
+    Shows number of questions and some statistics.
+    """
+    msg = update.message
+    chat = msg.chat
+    
+    # Check if trivia module is enabled
+    if not is_module_enabled(chat.id, "trivia_enabled"):
+        return await msg.reply_text("El módulo Trivia está desactivado en este chat.")
+    
+    pool = load_pool()
+    
+    if not pool:
+        return await msg.reply_text("📋 El pool de trivia está vacío. Usa /trivia_import para añadir preguntas.")
+    
+    # Get some stats
+    total = len(pool)
+    
+    # Count questions by checking unique IDs
+    ids = [q.get("id") for q in pool if "id" in q]
+    unique_ids = len(set(ids))
+    
+    # Get sample questions
+    sample_size = min(3, len(pool))
+    samples = pool[:sample_size]
+    
+    msg_text = f"📋 <b>Pool de Trivia</b>\n\n"
+    msg_text += f"Total de preguntas: {total}\n"
+    if unique_ids != total:
+        msg_text += f"⚠️ IDs únicos: {unique_ids}\n"
+    msg_text += f"\n<b>Muestra de preguntas:</b>\n"
+    
+    for i, q in enumerate(samples, 1):
+        question = q.get("question", "Sin pregunta")[:50]
+        if len(q.get("question", "")) > 50:
+            question += "..."
+        msg_text += f"{i}. {html.escape(question)}\n"
+    
+    await msg.reply_text(msg_text, parse_mode="HTML")
+
+async def trivia_clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /trivia_clear - Clear the entire trivia pool (admin only, with confirmation).
+    """
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    
+    # Check if trivia module is enabled
+    if not is_module_enabled(chat.id, "trivia_enabled"):
+        return await msg.reply_text("El módulo Trivia está desactivado en este chat.")
+    
+    # Admin only
+    if not await is_admin(context, chat.id, user.id):
+        return await msg.reply_text("Este comando es solo para administradores.")
+    
+    pool = load_pool()
+    
+    if not pool:
+        return await msg.reply_text("El pool ya está vacío.")
+    
+    # Create backup before clearing
+    backup_path = _backup_pool()
+    backup_info = f"Backup guardado en: {os.path.basename(backup_path)}" if backup_path else "⚠️ No se pudo crear backup"
+    
+    # Clear the pool
+    save_pool([])
+    
+    # Log the action
+    _log_admin_action(
+        chat.id,
+        user.id,
+        user.first_name or "Admin",
+        "trivia_clear",
+        f"Cleared pool with {len(pool)} questions"
+    )
+    
+    msg_text = (
+        f"✅ Pool limpiado exitosamente.\n"
+        f"📊 Se eliminaron {len(pool)} preguntas.\n"
+        f"💾 {backup_info}"
+    )
+    await msg.reply_text(msg_text)
+
+async def trivia_backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /trivia_backup - Create a manual backup of the trivia pool (admin only).
+    """
+    msg = update.message
+    chat = msg.chat
+    user = msg.from_user
+    
+    # Check if trivia module is enabled
+    if not is_module_enabled(chat.id, "trivia_enabled"):
+        return await msg.reply_text("El módulo Trivia está desactivado en este chat.")
+    
+    # Admin only
+    if not await is_admin(context, chat.id, user.id):
+        return await msg.reply_text("Este comando es solo para administradores.")
+    
+    backup_path = _backup_pool()
+    
+    if backup_path:
+        # Log the action
+        _log_admin_action(
+            chat.id,
+            user.id,
+            user.first_name or "Admin",
+            "trivia_backup",
+            f"Manual backup created: {os.path.basename(backup_path)}"
+        )
+        
+        await msg.reply_text(f"✅ Backup creado: {os.path.basename(backup_path)}")
+    else:
+        await msg.reply_text("❌ Error al crear el backup.")
+
+async def trivia_validate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /trivia_validate - Validate the current trivia pool structure.
+    """
+    msg = update.message
+    chat = msg.chat
+    
+    # Check if trivia module is enabled
+    if not is_module_enabled(chat.id, "trivia_enabled"):
+        return await msg.reply_text("El módulo Trivia está desactivado en este chat.")
+    
+    pool = load_pool()
+    
+    if not pool:
+        return await msg.reply_text("📋 El pool está vacío, no hay nada que validar.")
+    
+    is_valid, error = _validate_pool_list(pool)
+    
+    if is_valid:
+        msg_text = (
+            f"✅ <b>Pool válido</b>\n\n"
+            f"Total de preguntas: {len(pool)}\n"
+            f"Todas las preguntas tienen el formato correcto."
+        )
+        await msg.reply_text(msg_text, parse_mode="HTML")
+    else:
+        msg_text = (
+            f"❌ <b>Pool inválido</b>\n\n"
+            f"Error encontrado:\n"
+            f"<code>{html.escape(error)}</code>\n\n"
+            f"Corrige el error y vuelve a importar el pool."
+        )
+        await msg.reply_text(msg_text, parse_mode="HTML")
+
 
 # =========================
 # ON MESSAGE
@@ -2080,6 +2232,10 @@ def main():
 
     # TRIVIA
     app.add_handler(CommandHandler("trivia_import", trivia_import_cmd))
+    app.add_handler(CommandHandler("trivia_pool", trivia_pool_cmd))
+    app.add_handler(CommandHandler("trivia_clear", trivia_clear_cmd))
+    app.add_handler(CommandHandler("trivia_backup", trivia_backup_cmd))
+    app.add_handler(CommandHandler("trivia_validate", trivia_validate_cmd))
 
     # TIKTOK DOWNLOADER
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tiktok_detector), group=1)
@@ -2102,6 +2258,10 @@ def main():
     register_command("tres", "alias de /ttt para iniciar tres en raya")
     register_command("top_ttt", "muestra el ranking de tres en raya (wins/draws/losses)")
     register_command("trivia_import", "importa preguntas de trivia desde JSON", admin=True)
+    register_command("trivia_pool", "muestra información del pool de trivia actual")
+    register_command("trivia_clear", "limpia todo el pool de trivia", admin=True)
+    register_command("trivia_backup", "crea un backup manual del pool de trivia", admin=True)
+    register_command("trivia_validate", "valida la estructura del pool de trivia")
 
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
