@@ -1,202 +1,2202 @@
 [
-  {"id": 1, "question": "¿Cuál es la capital de Francia?", "choices": ["Lyon", "Marsella", "París", "Burdeos"], "answer": 2},
-  {"id": 2, "question": "¿Quién escribió 'Cien años de soledad'?", "choices": ["Julio Cortázar", "Gabriel García Márquez", "Mario Vargas Llosa", "Pablo Neruda"], "answer": 1},
-  {"id": 3, "question": "¿Cuál es el elemento químico con símbolo 'O'?", "choices": ["Oro", "Oxígeno", "Osmio", "Oxalato"], "answer": 1},
-  {"id": 4, "question": "¿En qué año comenzó la Segunda Guerra Mundial?", "choices": ["1914", "1939", "1945", "1929"], "answer": 1},
-  {"id": 5, "question": "¿Qué planeta es conocido como el Planeta Rojo?", "choices": ["Venus", "Marte", "Júpiter", "Saturno"], "answer": 1},
-  {"id": 6, "question": "¿Cuál es la raíz cuadrada de 144?", "choices": ["10", "11", "12", "14"], "answer": 2},
-  {"id": 7, "question": "¿Quién pintó 'La noche estrellada'?", "choices": ["Claude Monet", "Pablo Picasso", "Vincent van Gogh", "Salvador Dalí"], "answer": 2},
-  {"id": 8, "question": "¿Cuál es la moneda oficial de Reino Unido?", "choices": ["Euro", "Libra esterlina", "Dólar", "Franco"], "answer": 1},
-  {"id": 9, "question": "¿Qué lenguaje de programación se usa principalmente para desarrollo web frontend?", "choices": ["Python", "JavaScript", "C#", "Go"], "answer": 1},
-  {"id": 10, "question": "¿Cuál es el río más largo del mundo (según la mayoría de mediciones clásicas)?", "choices": ["Amazonas", "Nilo", "Yangtsé", "Misisipi"], "answer": 1},
-  {"id": 11, "question": "¿Quién compuso la Novena Sinfonía (Oda a la Alegría)?", "choices": ["Mozart", "Beethoven", "Bach", "Chopin"], "answer": 1},
-  {"id": 12, "question": "¿Cuál es la fórmula química del agua?", "choices": ["CO2", "H2O", "O2", "NaCl"], "answer": 1},
-  {"id": 13, "question": "¿En qué país se encuentra la ciudad de Tokio?", "choices": ["China", "Corea del Sur", "Japón", "Tailandia"], "answer": 2},
-  {"id": 14, "question": "¿Qué científico propuso la teoría de la relatividad?", "choices": ["Isaac Newton", "Albert Einstein", "Niels Bohr", "Galileo Galilei"], "answer": 1},
-  {"id": 15, "question": "¿Cuál es la capital de México?", "choices": ["Guadalajara", "Monterrey", "Puebla", "Ciudad de México"], "answer": 3},
-  {"id": 16, "question": "¿Qué deporte se practica en Wimbledon?", "choices": ["Fútbol", "Rugby", "Tenis", "Cricket"], "answer": 2},
-  {"id": 17, "question": "¿Quién es el autor de 'La Odisea'?", "choices": ["Homero", "Platón", "Sófocles", "Esquilo"], "answer": 0},
-  {"id": 18, "question": "¿Qué gas tienen en común las plantas y los humanos en la respiración/fotosíntesis (resumido)?,", "choices": ["Dióxido de carbono", "Oxígeno", "Nitrógeno", "Metano"], "answer": 0},
-  {"id": 19, "question": "¿Cuál es la velocidad aproximada de la luz en el vacío (km/s)?", "choices": ["300.000", "150.000", "3.000", "30.000"], "answer": 0},
-  {"id": 20, "question": "¿En qué país se originó el fútbol moderno?", "choices": ["Francia", "Brasil", "Inglaterra", "Italia"], "answer": 2},
-  {"id": 21, "question": "¿Cuál es el idioma más hablado del mundo por número de hablantes nativos?", "choices": ["Inglés", "Español", "Chino mandarín", "Hindi"], "answer": 2},
-  {"id": 22, "question": "¿Qué instrumento mide la presión atmosférica?", "choices": ["Barómetro", "Termómetro", "Higrómetro", "Anemómetro"], "answer": 0},
-  {"id": 23, "question": "¿Cuál es el símbolo químico del oro?", "choices": ["Ag", "Au", "Gd", "Go"], "answer": 1},
-  {"id": 24, "question": "¿Quién inventó la imprenta de tipos móviles en Europa (siglo XV)?", "choices": ["Johannes Gutenberg", "Thomas Edison", "Alexander Graham Bell", "Nikola Tesla"], "answer": 0},
-  {"id": 25, "question": "¿Qué país tiene la mayor superficie terrestre del mundo?", "choices": ["Canadá", "Estados Unidos", "Rusia", "China"], "answer": 2},
-  {"id": 26, "question": "¿Qué compositor escribió la ópera 'Carmen'?", "choices": ["Bizet", "Verdi", "Puccini", "Rossini"], "answer": 0},
-  {"id": 27, "question": "¿Cuál es la capital de Australia?", "choices": ["Sídney", "Melbourne", "Canberra", "Perth"], "answer": 2},
-  {"id": 28, "question": "¿Qué año cayó el Muro de Berlín?", "choices": ["1989", "1991", "1980", "1979"], "answer": 0},
-  {"id": 29, "question": "¿Cuál es la unidad básica de la herencia en biología?", "choices": ["Gen", "Célula", "Proteína", "Molécula"], "answer": 0},
-  {"id": 30, "question": "¿Qué película ganó el Oscar a Mejor Película en 1994 (ganadora más conocida)?", "choices": ["Forrest Gump", "Pulp Fiction", "The Shawshank Redemption", "Lion King"], "answer": 0},
-  {"id": 31, "question": "¿Cuál es el mayor océano del planeta?", "choices": ["Atlántico", "Índico", "Pacífico", "Ártico"], "answer": 2},
-  {"id": 32, "question": "¿Qué país alberga las ruinas de Machu Picchu?", "choices": ["Bolivia", "Perú", "Ecuador", "Colombia"], "answer": 1},
-  {"id": 33, "question": "¿Qué número es primo?", "choices": ["21", "25", "29", "35"], "answer": 2},
-  {"id": 34, "question": "¿Cuál es el nombre del proceso por el que las plantas convierten luz en energía?", "choices": ["Respiración", "Fermentación", "Fotosíntesis", "Transpiración"], "answer": 2},
-  {"id": 35, "question": "¿Quién fue el primer presidente de los Estados Unidos?", "choices": ["Abraham Lincoln", "George Washington", "Thomas Jefferson", "John Adams"], "answer": 1},
-  {"id": 36, "question": "¿Qué es un agujero negro?", "choices": ["Una estrella que brilla intensamente", "Una región del espacio con gravedad extrema", "Una nube de gas", "Un planeta gigante"], "answer": 1},
-  {"id": 37, "question": "En informática, ¿qué significa 'CPU'?", "choices": ["Central Processing Unit", "Computer Personal Unit", "Control Processing Unit", "Central Power Unit"], "answer": 0},
-  {"id": 38, "question": "¿Cómo se llama el pintor español famoso por el surrealismo y obras como 'La persistencia de la memoria'?", "choices": ["Pablo Picasso", "Salvador Dalí", "Francisco Goya", "Diego Velázquez"], "answer": 1},
-  {"id": 39, "question": "¿Qué tipo de energía libera una reacción nuclear de fisión?", "choices": ["Energía química", "Energía térmica y radiactiva", "Energía sonora", "Energía potencial"], "answer": 1},
-  {"id": 40, "question": "¿Cuál es la capital de Canadá?", "choices": ["Toronto", "Vancouver", "Ottawa", "Montreal"], "answer": 2},
-  {"id": 41, "question": "¿Qué autor escribió '1984'?", "choices": ["Aldous Huxley", "George Orwell", "Ray Bradbury", "J.R.R. Tolkien"], "answer": 1},
-  {"id": 42, "question": "¿Qué ciudad es famosa por el Coliseo?", "choices": ["Atenas", "Roma", "Estambul", "Jerusalén"], "answer": 1},
-  {"id": 43, "question": "¿Cuál es el gas más abundante en la atmósfera terrestre?", "choices": ["Oxígeno", "Dióxido de carbono", "Nitrógeno", "Argón"], "answer": 2},
-  {"id": 44, "question": "¿Qué instrumento musical tiene 88 teclas en su versión estándar?", "choices": ["Guitarra", "Violín", "Piano", "Trompeta"], "answer": 2},
-  {"id": 45, "question": "¿Cuál es la principal ventaja del protocolo HTTPS frente a HTTP?", "choices": ["Mayores velocidades", "Cifrado de la comunicación", "Menor coste", "Compatibilidad con navegadores"], "answer": 1},
-  {"id": 46, "question": "¿Cómo se llama la ley que relaciona corriente, voltaje y resistencia?", "choices": ["Ley de Faraday", "Ley de Ohm", "Ley de Ampère", "Ley de Newton"], "answer": 1},
-  {"id": 47, "question": "¿Qué país ganó la Copa Mundial de la FIFA en 2018?", "choices": ["Brasil", "Alemania", "Francia", "Argentina"], "answer": 2},
-  {"id": 48, "question": "¿Cuál es el símbolo químico del sodio?", "choices": ["S", "Sd", "Na", "So"], "answer": 2},
-  {"id": 49, "question": "¿Qué técnica literaria usa la repetición de sonidos iniciales en palabras cercanas?", "choices": ["Metáfora", "Aliteración", "Hipérbole", "Antítesis"], "answer": 1},
-  {"id": 50, "question": "¿Qué descubrimiento se atribuye a Alexander Fleming?", "choices": ["Vacunas", "Penicilina", "Rayos X", "Insulina"], "answer": 1},
-  {"id": 51, "question": "¿Cuál es la capital de Argentina?", "choices": ["Córdoba", "Rosario", "Mendoza", "Buenos Aires"], "answer": 3},
-  {"id": 52, "question": "¿Qué país es conocido como la Tierra del Sol Naciente?", "choices": ["China", "Japón", "Corea", "Tailandia"], "answer": 1},
-  {"id": 53, "question": "¿En computación, qué es 'HTML'?", "choices": ["Lenguaje de programación", "Hoja de estilos", "Lenguaje de marcado de hipertexto", "Base de datos"], "answer": 2},
-  {"id": 54, "question": "¿Cuál es el número áureo (aproximado)?", "choices": ["1.414", "3.1416", "1.618", "2.718"], "answer": 2},
-  {"id": 55, "question": "¿Qué famoso pintor cortó parte de su propia oreja?", "choices": ["Van Gogh", "Picasso", "Rembrandt", "Monet"], "answer": 0},
-  {"id": 56, "question": "¿Qué país organizó los Juegos Olímpicos de 2016?", "choices": ["China", "Brasil", "Reino Unido", "Rusia"], "answer": 1},
-  {"id": 57, "question": "¿Qué elemento se utiliza como base en las baterías alcalinas tradicionales?", "choices": ["Litio", "Zinc", "Carbono", "Níquel"], "answer": 1},
-  {"id": 58, "question": "¿Cuál es la capital de Egipto?", "choices": ["Alejandría", "Luxor", "El Cairo", "Gizeh"], "answer": 2},
-  {"id": 59, "question": "¿Qué obra escribió Miguel de Cervantes?", "choices": ["La Regenta", "Don Quijote de la Mancha", "El Aleph", "La casa de Bernarda Alba"], "answer": 1},
-  {"id": 60, "question": "¿Qué aparato se utiliza para medir terremotos?", "choices": ["Torquímetro", "Sismógrafo", "Barómetro", "Higrómetro"], "answer": 1},
-  {"id": 61, "question": "¿Cuál es la lengua oficial de Brasil?", "choices": ["Español", "Portugués", "Inglés", "Francés"], "answer": 1},
-  {"id": 62, "question": "¿Cuál fue el primer elemento en la tabla periódica (por número atómico)?", "choices": ["Helio", "Hidrógeno", "Carbono", "Oxígeno"], "answer": 1},
-  {"id": 63, "question": "¿Qué composer escribió la 'Primavera' de las Cuatro Estaciones?", "choices": ["Vivaldi", "Bach", "Handel", "Mozart"], "answer": 0},
-  {"id": 64, "question": "¿Cuál es el principal componente del gas natural?", "choices": ["Etano", "Metano", "Propano", "Butano"], "answer": 1},
-  {"id": 65, "question": "¿Qué país tiene forma de bota en su geografía?", "choices": ["Grecia", "Italia", "Portugal", "Turquía"], "answer": 1},
-  {"id": 66, "question": "¿Qué test mide la inteligencia en adultos de forma clásica (dicen)?", "choices": ["Test de Rorschach", "IQ (cociente intelectual)", "Test de Turing", "Test de Cooper"], "answer": 1},
-  {"id": 67, "question": "¿Quién escribió 'Hamlet'?", "choices": ["Christopher Marlowe", "William Shakespeare", "Miguel de Cervantes", "Ben Jonson"], "answer": 1},
-  {"id": 68, "question": "¿Cuál es la capital de Sudáfrica (una de las oficiales)?", "choices": ["Ciudad del Cabo", "Johannesburgo", "Pretoria", "Durban"], "answer": 2},
-  {"id": 69, "question": "¿Qué inventor desarrolló la bombilla incandescente tal como la conocemos (comercialmente) en el siglo XIX?", "choices": ["Nikola Tesla", "Thomas Edison", "Guglielmo Marconi", "Alexander Graham Bell"], "answer": 1},
-  {"id": 70, "question": "¿Qué país usa el won como moneda?", "choices": ["China", "Corea del Sur", "Japón", "Vietnam"], "answer": 1},
-  {"id": 71, "question": "¿Cuál es el principal órgano del sistema circulatorio humano?", "choices": ["Pulmones", "Corazón", "Hígado", "Riñón"], "answer": 1},
-  {"id": 72, "question": "¿Qué tipo de triángulo tiene todos sus lados de diferente longitud?", "choices": ["Equilátero", "Isósceles", "Escaleno", "Rectángulo"], "answer": 2},
-  {"id": 73, "question": "¿Quién escribió 'El Principito'?", "choices": ["Antoine de Saint-Exupéry", "Jules Verne", "Victor Hugo", "Albert Camus"], "answer": 0},
-  {"id": 74, "question": "¿Cuál es la capital de Nigeria?", "choices": ["Lagos", "Abuja", "Kano", "Ibadan"], "answer": 1},
-  {"id": 75, "question": "¿Qué planeta tiene anillos visibles desde la Tierra con telescopio?", "choices": ["Marte", "Venus", "Saturno", "Mercurio"], "answer": 2},
-  {"id": 76, "question": "¿Qué país es conocido por el sushi tradicional?", "choices": ["China", "Japón", "Corea", "Tailandia"], "answer": 1},
-  {"id": 77, "question": "¿Qué matemático es conocido por el teorema que relaciona los catetos y la hipotenusa en un triángulo rectángulo?", "choices": ["Euclides", "Pitagoras", "Newton", "Fermat"], "answer": 1},
-  {"id": 78, "question": "¿Qué idioma proviene del latín (familia romance)?", "choices": ["Alemán", "Latvian", "Italiano", "Ruso"], "answer": 2},
-  {"id": 79, "question": "¿Cuál es la capital de Turquía?", "choices": ["Estambul", "Ankara", "Esmirna", "Bursa"], "answer": 1},
-  {"id": 80, "question": "¿Qué dispositivo almacena datos en un ordenador de forma permanente (no volátil)?", "choices": ["RAM", "CPU", "SSD/HDD", "GPU"], "answer": 2},
-  {"id": 81, "question": "¿En qué año se lanzó el primer iPhone comercial por Apple?", "choices": ["2005", "2007", "2009", "2010"], "answer": 1},
-  {"id": 82, "question": "¿Qué escritor argentino escribió 'El Aleph'?", "choices": ["Jorge Luis Borges", "Julio Cortázar", "Adolfo Bioy Casares", "Ernesto Sabato"], "answer": 0},
-  {"id": 83, "question": "¿Cuál es la principal causa del ciclo del carbono en la Tierra?", "choices": ["Procesos biológicos y geológicos", "La rotación terrestre", "El campo magnético", "La marea"], "answer": 0},
-  {"id": 84, "question": "¿Qué ley física describe la gravitación universal entre masas?", "choices": ["Ley de Hooke", "Ley de Newton", "Ley de Coulomb", "Ley de Boyle"], "answer": 1},
-  {"id": 85, "question": "¿Cuál es el símbolo químico del hierro?", "choices": ["Fe", "Ir", "Fr", "Fi"], "answer": 0},
-  {"id": 86, "question": "¿Qué escritor ruso escribió 'Crimen y castigo'?", "choices": ["Tolstói", "Dostoyevski", "Chejov", "Gógol"], "answer": 1},
-  {"id": 87, "question": "¿Qué órgano produce la insulina en el cuerpo humano?", "choices": ["Hígado", "Páncreas", "Riñón", "Bazo"], "answer": 1},
-  {"id": 88, "question": "¿Cuál es el resultado de 9 × 7?", "choices": ["54", "63", "72", "49"], "answer": 1},
-  {"id": 89, "question": "¿Qué país es mayor productor de vino tradicionalmente?", "choices": ["Australia", "Sudáfrica", "Francia", "México"], "answer": 2},
-  {"id": 90, "question": "¿Cuál es el continente con más países reconocidos?", "choices": ["África", "Europa", "Asia", "América"], "answer": 0},
-  {"id": 91, "question": "¿Qué físico formuló las tres leyes del movimiento?", "choices": ["Einstein", "Newton", "Galileo", "Kepler"], "answer": 1},
-  {"id": 92, "question": "¿Qué país tiene la ciudad de Reykjavík como capital?", "choices": ["Noruega", "Islandia", "Finlandia", "Suecia"], "answer": 1},
-  {"id": 93, "question": "¿Qué red social popular se lanzó en 2004 y fue creada por Mark Zuckerberg?", "choices": ["Twitter", "Facebook", "Instagram", "LinkedIn"], "answer": 1},
-  {"id": 94, "question": "¿Qué substantivo en español es un sinónimo aproximado de 'abundancia'?", "choices": ["Escasez", "Carencia", "Fertilidad", "Plenitud"], "answer": 3},
-  {"id": 95, "question": "¿Qué gas es esencial para la respiración humana?", "choices": ["Dióxido de carbono", "Oxígeno", "Argón", "Helio"], "answer": 1},
-  {"id": 96, "question": "¿Qué tipo de obra es 'La Casa de Bernarda Alba'?", "choices": ["Novela", "Ensayo", "Obra teatral", "Poesía"], "answer": 2},
-  {"id": 97, "question": "¿Quién pintó 'Las Meninas'?", "choices": ["Goya", "Velázquez", "Picasso", "El Greco"], "answer": 1},
-  {"id": 98, "question": "¿Qué continente es Australia también conocido como?", "choices": ["Oceanía", "Eurasia", "Antártida", "África"], "answer": 0},
-  {"id": 99, "question": "¿Qué invento se atribuye a los hermanos Wright?", "choices": ["Teléfono", "Avión", "Automóvil", "Radio"], "answer": 1},
-  {"id": 100, "question": "¿Cuál es la capital de Chile?", "choices": ["Santiago", "Valparaíso", "Concepción", "Antofagasta"], "answer": 0}
-  {"id":101,"question":"¿Cuál es la capital de Portugal?","choices":["Oporto","Lisboa","Coimbra","Faro"],"answer":1},
-  {"id":102,"question":"¿Quién escribió 'La metamorfosis'?","choices":["Franz Kafka","Albert Camus","Hermann Hesse","Thomas Mann"],"answer":0},
-  {"id":103,"question":"¿Cuál es el número primo siguiente a 53?","choices":["55","57","59","61"],"answer":2},
-  {"id":104,"question":"¿Qué país tiene la ciudad de Marrakech?","choices":["Argelia","Marruecos","Túnez","Libia"],"answer":1},
-  {"id":105,"question":"¿Qué órgano del cuerpo produce bilis?","choices":["Páncreas","Hígado","Vesícula biliar","Riñón"],"answer":1},
-  {"id":106,"question":"¿Quién pintó 'El Grito'?","choices":["Edvard Munch","Gustav Klimt","Henri Matisse","Paul Cézanne"],"answer":0},
-  {"id":107,"question":"¿Cuál es la capital de Perú?","choices":["Lima","Cusco","Arequipa","Trujillo"],"answer":0},
-  {"id":108,"question":"¿Qué científico propuso la ley de la gravitación universal?","choices":["Kepler","Newton","Einstein","Huygens"],"answer":1},
-  {"id":109,"question":"¿Cuál es la unidad de medida de la resistencia eléctrica?","choices":["Voltio","Amperio","Ohmio","Vatio"],"answer":2},
-  {"id":110,"question":"¿Qué gas es liberado en mayor cantidad por la combustión completa de hidrocarburos?","choices":["Dióxido de carbono","Monóxido de carbono","Metano","Oxígeno"],"answer":0},
-  {"id":111,"question":"¿Cuál es la moneda de Suecia?","choices":["Corona sueca","Euro","Corona danesa","Corona noruega"],"answer":0},
-  {"id":112,"question":"¿En qué continente está Madagascar?","choices":["África","Asia","Oceanía","América"],"answer":0},
-  {"id":113,"question":"¿Cuál es el autor de 'El retrato de Dorian Gray'?","choices":["Oscar Wilde","Bram Stoker","Mary Shelley","H. G. Wells"],"answer":0},
-  {"id":114,"question":"¿Qué día se celebra el Día de la Bastilla en Francia?","choices":["1 de mayo","14 de julio","4 de julio","3 de marzo"],"answer":1},
-  {"id":115,"question":"¿Cuál es el metal cuyo símbolo es 'Fe'?","choices":["Plata","Hierro","Fósforo","Flúor"],"answer":1},
-  {"id":116,"question":"¿Qué sistema numérico usa base 2?","choices":["Decimal","Hexadecimal","Binario","Octal"],"answer":2},
-  {"id":117,"question":"¿Cuál es el idioma oficial de Argentina?","choices":["Portugués","Español","Quechua","Guaraní"],"answer":1},
-  {"id":118,"question":"¿Qué instrumento se usa para medir la temperatura?","choices":["Barómetro","Termómetro","Higrómetro","Amperímetro"],"answer":1},
-  {"id":119,"question":"¿Cuál es la capital de Finlandia?","choices":["Helsinki","Oslo","Estocolmo","Copenhague"],"answer":0},
-  {"id":120,"question":"¿Qué pintor es autor de 'Guernica'?","choices":["Pablo Picasso","Salvador Dalí","Joan Miró","Diego Rivera"],"answer":0},
-  {"id":121,"question":"¿Cuál es la fórmula del dióxido de carbono?","choices":["CO","CO2","C2O","O2C"],"answer":1},
-  {"id":122,"question":"¿En qué año se lanzó la película 'Titanic' de James Cameron?","choices":["1995","1997","2000","1993"],"answer":1},
-  {"id":123,"question":"¿Qué país tiene más habitantes?","choices":["India","Estados Unidos","Australia","Canadá"],"answer":0},
-  {"id":124,"question":"¿Qué oceáno baña las costas de Perú?","choices":["Atlántico","Pacífico","Índico","Ártico"],"answer":1},
-  {"id":125,"question":"¿Cuál es el símbolo químico del carbono?","choices":["C","Ca","Co","Cr"],"answer":0},
-  {"id":126,"question":"¿Qué instrumento musical usa cuerdas y se toca con arco?","choices":["Guitarra","Piano","Violín","Flauta"],"answer":2},
-  {"id":127,"question":"¿Quién escribió 'Fausto'?","choices":["Goethe","Schiller","Heine","Brecht"],"answer":0},
-  {"id":128,"question":"¿Qué velocidad media (aprox.) tiene un corredor olímpico de 100 m en segundos (sprinters)?","choices":["~4 s","~10 s","~20 s","~30 s"],"answer":1},
-  {"id":129,"question":"¿Cuál es la capital de Grecia?","choices":["Atenas","Tesalónica","Patras","Heraclión"],"answer":0},
-  {"id":130,"question":"¿Qué científico es conocido por sus leyes del electromagnetismo (Maxwell)?","choices":["Faraday","Maxwell","Tesla","Ohm"],"answer":1},
-  {"id":131,"question":"¿Cuál es la distancia aproximada entre la Tierra y la Luna en kilómetros?","choices":["384.000 km","150.000 km","1.000.000 km","12.000 km"],"answer":0},
-  {"id":132,"question":"¿Qué continente es el más pequeño por superficie?","choices":["Europa","Oceanía","Antártida","América"],"answer":1},
-  {"id":133,"question":"¿Qué tipo de animal es un ornitorrinco?","choices":["Reptil","Ave","Mamífero","Anfibio"],"answer":2},
-  {"id":134,"question":"¿Cuál es la capital de Irlanda?","choices":["Dublín","Cork","Galway","Belfast"],"answer":0},
-  {"id":135,"question":"¿Qué elemento químico tiene símbolo 'Na'?","choices":["Nitrógeno","Sodio","Neón","Níquel"],"answer":1},
-  {"id":136,"question":"¿Cuál es la unidad de medida de la frecuencia?","choices":["Amperio","Hertz","Pascal","Newton"],"answer":1},
-  {"id":137,"question":"¿Qué país es conocido por los tulipanes y los molinos de viento?","choices":["Bélgica","Países Bajos","Dinamarca","Suiza"],"answer":1},
-  {"id":138,"question":"¿Quién escribió 'El Principito'?","choices":["Antoine de Saint-Exupéry","Victor Hugo","Albert Camus","Jean-Paul Sartre"],"answer":0},
-  {"id":139,"question":"¿Qué gas utilizamos para inflar globos para que sean más ligeros que el aire?","choices":["Oxígeno","Hidrógeno","Helio","Nitrógeno"],"answer":2},
-  {"id":140,"question":"¿Cuál es la capital de Chile?","choices":["Valparaíso","Santiago","Concepción","La Serena"],"answer":1},
-  {"id":141,"question":"¿En qué país se encuentra la ciudad de Dubrovnik?","choices":["Croacia","Grecia","Montenegro","Eslovenia"],"answer":0},
-  {"id":142,"question":"¿Cuál es el planeta más cercano al Sol?","choices":["Venus","Mercurio","Marte","Tierra"],"answer":1},
-  {"id":143,"question":"¿Qué remedio antibiótico descubrió Alexander Fleming?","choices":["Aspirina","Penicilina","Insulina","Cloroformo"],"answer":1},
-  {"id":144,"question":"¿Cuál es la capital de Colombia?","choices":["Medellín","Bogotá","Cali","Barranquilla"],"answer":1},
-  {"id":145,"question":"¿Qué idioma es oficial en Suiza (entre otros)?","choices":["Español","Portugués","Alemán","Turco"],"answer":2},
-  {"id":146,"question":"¿Qué país inventó la pizza moderna (Nápoles)?","choices":["Francia","España","Italia","Grecia"],"answer":2},
-  {"id":147,"question":"¿Qué metal se utiliza principalmente en cables eléctricos por su conductividad y coste?","choices":["Aluminio","Hierro","Cobre","Oro"],"answer":2},
-  {"id":148,"question":"¿Cuál es la capital de Indonesia?","choices":["Yakarta","Bali","Surabaya","Bandung"],"answer":0},
-  {"id":149,"question":"¿Qué órgano regula el equilibrio y la coordinación en el cuerpo humano?","choices":["Cerebelo","Hipotálamo","Cerebro frontal","Tálamo"],"answer":0},
-  {"id":150,"question":"¿Qué movimiento artístico pertenece Picasso y Braque al inicio del siglo XX?","choices":["Impresionismo","Cubismo","Surrealismo","Expresionismo"],"answer":1},
-  {"id":151,"question":"¿Cuál es la principal fuente de energía renovable que depende del sol?","choices":["Geotérmica","Hidroeléctrica","Solar","Nuclear"],"answer":2},
-  {"id":152,"question":"¿Quién compuso 'La flauta mágica'?","choices":["Mozart","Beethoven","Haydn","Schubert"],"answer":0},
-  {"id":153,"question":"¿Qué país tiene forma alargada en la costa del Pacífico de Sudamérica?","choices":["Chile","Perú","Ecuador","Colombia"],"answer":0},
-  {"id":154,"question":"¿Qué número romano representa 50?","choices":["X","L","C","V"],"answer":1},
-  {"id":155,"question":"¿Cuál es el principal ingrediente del guacamole?","choices":["Tomate","Aguacate","Cebolla","Pimiento"],"answer":1},
-  {"id":156,"question":"¿Qué deporte utiliza el término 'ace' para un servicio directo y ganador?","choices":["Fútbol","Baloncesto","Tenis","Boxeo"],"answer":2},
-  {"id":157,"question":"¿Cuál es la capital de Noruega?","choices":["Oslo","Bergen","Trondheim","Stavanger"],"answer":0},
-  {"id":158,"question":"¿Qué químico propuso la tabla periódica moderna (orden por número atómico)?","choices":["Mendeleiev","Dmitri Mendeleev","Henry Moseley","John Dalton"],"answer":2},
-  {"id":159,"question":"¿En qué país se encuentra la península de Yucatán?","choices":["México","Belice","Guatemala","Honduras"],"answer":0},
-  {"id":160,"question":"¿Qué animal es conocido por su memoria y capacidad para resolver problemas (grande y gris)?","choices":["Tigre","Elefante","Cocodrilo","Rinoceronte"],"answer":1},
-  {"id":161,"question":"¿Cuál es la capital de Bélgica?","choices":["Brujas","Amberes","Bruselas","Gante"],"answer":2},
-  {"id":162,"question":"¿Qué escritor creó al detective Sherlock Holmes?","choices":["Agatha Christie","Arthur Conan Doyle","Edgar Allan Poe","Raymond Chandler"],"answer":1},
-  {"id":163,"question":"¿Qué país es famoso por la torre inclinada de Pisa?","choices":["Italia","Francia","España","Grecia"],"answer":0},
-  {"id":164,"question":"¿Cuál es el principal componente del acero?","choices":["Carbono y hierro","Plomo","Cobre","Aluminio"],"answer":0},
-  {"id":165,"question":"¿Qué científico desarrolló la teoría del Big Bang (concepto popularizado)?","choices":["Edwin Hubble","George Lemaitre","Stephen Hawking","Carl Sagan"],"answer":1},
-  {"id":166,"question":"¿Qué instrumento se utiliza para observar estrellas y galaxias?","choices":["Microscopio","Telescopio","Barómetro","Sismógrafo"],"answer":1},
-  {"id":167,"question":"¿Qué país celebró la Expo Universal de 2010 en Shanghai?","choices":["Japón","China","Corea del Sur","Singapur"],"answer":1},
-  {"id":168,"question":"¿Qué animal construye presas en ríos y lagos?","choices":["Nutria","Castor","Castorillo","Beaver (inglés)"],"answer":1},
-  {"id":169,"question":"¿Cuál es la capital de Hungría?","choices":["Budapest","Praga","Bratislava","Bucarest"],"answer":0},
-  {"id":170,"question":"¿Qué molécula porta la información genética en la mayoría de los seres vivos?","choices":["ARN","ADN","Proteína","Lípido"],"answer":1},
-  {"id":171,"question":"¿Qué fiesta tradicional japonesa celebra los cerezos en flor?","choices":["Hanami","Tanabata","Obon","Setsubun"],"answer":0},
-  {"id":172,"question":"¿Cuál es la capital de Turquía?","choices":["Estambul","Ankara","Izmir","Antalya"],"answer":1},
-  {"id":173,"question":"¿Quién escribió 'Rayuela'?","choices":["Mario Vargas Llosa","Julio Cortázar","Jorge Luis Borges","Gabriel García Márquez"],"answer":1},
-  {"id":174,"question":"¿Cuál es la distancia en metros de una maratón oficial?","choices":["40.000 m","42.195 m","45.000 m","50.000 m"],"answer":1},
-  {"id":175,"question":"¿Qué país fue el primero en dar el derecho al voto a las mujeres (a nivel nacional)?","choices":["Nueva Zelanda","Reino Unido","Estados Unidos","Francia"],"answer":0},
-  {"id":176,"question":"¿Qué tipo de triángulo tiene un ángulo recto?","choices":["Equilátero","Isósceles","Rectángulo (rectángulo no es tipo)","Rectángulo/Rectángulo no es correcto"],"answer":1},
-  {"id":177,"question":"¿Cuál es la moneda oficial de Rusia?","choices":["Rublo","Ruble (var.)","Euro","Dólar"],"answer":0},
-  {"id":178,"question":"¿Qué escritor escribió 'El coronel no tiene quien le escriba'?","choices":["Mario Benedetti","Gabriel García Márquez","Julio Cortázar","Ernesto Sabato"],"answer":1},
-  {"id":179,"question":"¿Qué metal precioso tiene el símbolo 'Ag'?","choices":["Oro","Plata","Platino","Paladio"],"answer":1},
-  {"id":180,"question":"¿Qué continente contiene el desierto del Sahara?","choices":["Asia","África","América del Sur","Oceanía"],"answer":1},
-  {"id":181,"question":"¿Qué deporte usa términos como 'birdie' y 'par'?","choices":["Tenis","Golf","Bádminton","Cricket"],"answer":1},
-  {"id":182,"question":"¿Cuál es la capital de Polonia?","choices":["Cracovia","Varsovia","Gdansk","Wroclaw"],"answer":1},
-  {"id":183,"question":"¿Qué obra musical compuso Vivaldi conocida por estaciones?","choices":["La Primavera","La Quinta Sinfonía","El Lago de los Cisnes","La Boheme"],"answer":0},
-  {"id":184,"question":"¿Qué famoso científico estudió la evolución por selección natural?","choices":["Gregor Mendel","Charles Darwin","Louis Pasteur","Alexander Fleming"],"answer":1},
-  {"id":185,"question":"¿Cuál es el país más grande de África por superficie?","choices":["Argelia","Sudán","Congo","Sudáfrica"],"answer":0},
-  {"id":186,"question":"¿Qué órgano produce orina en el cuerpo humano?","choices":["Hígado","Riñones","Pulmones","Intestino"],"answer":1},
-  {"id":187,"question":"¿Qué idioma se habla predominantemente en Quebec (Canadá)?","choices":["Inglés","Francés","Español","Alemán"],"answer":1},
-  {"id":188,"question":"¿Qué festival de cine se celebra en Cannes?","choices":["Berlinale","Cannes","Venecia","Sundance"],"answer":1},
-  {"id":189,"question":"¿Qué gas se usa en extintores de incendios comunes (CO2)?","choices":["Oxígeno","Dióxido de carbono","Hidrógeno","Metano"],"answer":1},
-  {"id":190,"question":"¿Cuál es la capital de Hungría?","choices":["Debrecen","Szeged","Budapest","Pécs"],"answer":2},
-  {"id":191,"question":"¿Qué autor escribió 'Los miserables'?","choices":["Victor Hugo","Émile Zola","Gustave Flaubert","Honoré de Balzac"],"answer":0},
-  {"id":192,"question":"¿Qué planeta tiene mayor gravedad superficial que la Tierra?","choices":["Mercurio","Marte","Júpiter","Venus"],"answer":2},
-  {"id":193,"question":"¿Cuál es la capital de Nueva Zelanda?","choices":["Auckland","Wellington","Christchurch","Dunedin"],"answer":1},
-  {"id":194,"question":"¿Qué técnica pictórica utiliza la mezcla de puntos de color (puntillismo)?","choices":["Cubismo","Impresionismo","Puntillismo","Expresionismo"],"answer":2},
-  {"id":195,"question":"¿Quién fue el primer hombre en orbitar la Tierra?","choices":["Neil Armstrong","Yuri Gagarin","Alan Shepard","John Glenn"],"answer":1},
-  {"id":196,"question":"¿Qué vitamina es producida por la piel con la ayuda del sol?","choices":["Vitamina A","Vitamina C","Vitamina D","Vitamina B12"],"answer":2},
-  {"id":197,"question":"¿Qué científico propuso las leyes del movimiento y la gravitación?","choices":["Newton","Kepler","Galileo","Descartes"],"answer":0},
-  {"id":198,"question":"¿Cuál es la capital de Egipto?","choices":["El Cairo","Luxor","Alejandría","Asuán"],"answer":0},
-  {"id":199,"question":"¿Qué país tiene el mayor número de islas en el mundo?","choices":["Indonesia","Filipinas","Suecia","Canadá"],"answer":2},
-  {"id":200,"question":"¿Qué personaje literario creó Miguel de Cervantes?","choices":["Raskólnikov","Don Quijote","Hamlet","Fausto"],"answer":1}
+  {
+    "id": 1,
+    "question": "¿Cuál es la capital de Francia?",
+    "choices": [
+      "Lyon",
+      "Marsella",
+      "París",
+      "Burdeos"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 2,
+    "question": "¿Quién escribió 'Cien años de soledad'?",
+    "choices": [
+      "Julio Cortázar",
+      "Gabriel García Márquez",
+      "Mario Vargas Llosa",
+      "Pablo Neruda"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 3,
+    "question": "¿Cuál es el elemento químico con símbolo 'O'?",
+    "choices": [
+      "Oro",
+      "Oxígeno",
+      "Osmio",
+      "Oxalato"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 4,
+    "question": "¿En qué año comenzó la Segunda Guerra Mundial?",
+    "choices": [
+      "1914",
+      "1939",
+      "1945",
+      "1929"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 5,
+    "question": "¿Qué planeta es conocido como el Planeta Rojo?",
+    "choices": [
+      "Venus",
+      "Marte",
+      "Júpiter",
+      "Saturno"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 6,
+    "question": "¿Cuál es la raíz cuadrada de 144?",
+    "choices": [
+      "10",
+      "11",
+      "12",
+      "14"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 7,
+    "question": "¿Quién pintó 'La noche estrellada'?",
+    "choices": [
+      "Claude Monet",
+      "Pablo Picasso",
+      "Vincent van Gogh",
+      "Salvador Dalí"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 8,
+    "question": "¿Cuál es la moneda oficial de Reino Unido?",
+    "choices": [
+      "Euro",
+      "Libra esterlina",
+      "Dólar",
+      "Franco"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 9,
+    "question": "¿Qué lenguaje de programación se usa principalmente para desarrollo web frontend?",
+    "choices": [
+      "Python",
+      "JavaScript",
+      "C#",
+      "Go"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 10,
+    "question": "¿Cuál es el río más largo del mundo (según la mayoría de mediciones clásicas)?",
+    "choices": [
+      "Amazonas",
+      "Nilo",
+      "Yangtsé",
+      "Misisipi"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 11,
+    "question": "¿Quién compuso la Novena Sinfonía (Oda a la Alegría)?",
+    "choices": [
+      "Mozart",
+      "Beethoven",
+      "Bach",
+      "Chopin"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 12,
+    "question": "¿Cuál es la fórmula química del agua?",
+    "choices": [
+      "CO2",
+      "H2O",
+      "O2",
+      "NaCl"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 13,
+    "question": "¿En qué país se encuentra la ciudad de Tokio?",
+    "choices": [
+      "China",
+      "Corea del Sur",
+      "Japón",
+      "Tailandia"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 14,
+    "question": "¿Qué científico propuso la teoría de la relatividad?",
+    "choices": [
+      "Isaac Newton",
+      "Albert Einstein",
+      "Niels Bohr",
+      "Galileo Galilei"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 15,
+    "question": "¿Cuál es la capital de México?",
+    "choices": [
+      "Guadalajara",
+      "Monterrey",
+      "Puebla",
+      "Ciudad de México"
+    ],
+    "answer": 3
+  },
+  {
+    "id": 16,
+    "question": "¿Qué deporte se practica en Wimbledon?",
+    "choices": [
+      "Fútbol",
+      "Rugby",
+      "Tenis",
+      "Cricket"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 17,
+    "question": "¿Quién es el autor de 'La Odisea'?",
+    "choices": [
+      "Homero",
+      "Platón",
+      "Sófocles",
+      "Esquilo"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 18,
+    "question": "¿Qué gas tienen en común las plantas y los humanos en la respiración/fotosíntesis (resumido)?,",
+    "choices": [
+      "Dióxido de carbono",
+      "Oxígeno",
+      "Nitrógeno",
+      "Metano"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 19,
+    "question": "¿Cuál es la velocidad aproximada de la luz en el vacío (km/s)?",
+    "choices": [
+      "300.000",
+      "150.000",
+      "3.000",
+      "30.000"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 20,
+    "question": "¿En qué país se originó el fútbol moderno?",
+    "choices": [
+      "Francia",
+      "Brasil",
+      "Inglaterra",
+      "Italia"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 21,
+    "question": "¿Cuál es el idioma más hablado del mundo por número de hablantes nativos?",
+    "choices": [
+      "Inglés",
+      "Español",
+      "Chino mandarín",
+      "Hindi"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 22,
+    "question": "¿Qué instrumento mide la presión atmosférica?",
+    "choices": [
+      "Barómetro",
+      "Termómetro",
+      "Higrómetro",
+      "Anemómetro"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 23,
+    "question": "¿Cuál es el símbolo químico del oro?",
+    "choices": [
+      "Ag",
+      "Au",
+      "Gd",
+      "Go"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 24,
+    "question": "¿Quién inventó la imprenta de tipos móviles en Europa (siglo XV)?",
+    "choices": [
+      "Johannes Gutenberg",
+      "Thomas Edison",
+      "Alexander Graham Bell",
+      "Nikola Tesla"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 25,
+    "question": "¿Qué país tiene la mayor superficie terrestre del mundo?",
+    "choices": [
+      "Canadá",
+      "Estados Unidos",
+      "Rusia",
+      "China"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 26,
+    "question": "¿Qué compositor escribió la ópera 'Carmen'?",
+    "choices": [
+      "Bizet",
+      "Verdi",
+      "Puccini",
+      "Rossini"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 27,
+    "question": "¿Cuál es la capital de Australia?",
+    "choices": [
+      "Sídney",
+      "Melbourne",
+      "Canberra",
+      "Perth"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 28,
+    "question": "¿Qué año cayó el Muro de Berlín?",
+    "choices": [
+      "1989",
+      "1991",
+      "1980",
+      "1979"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 29,
+    "question": "¿Cuál es la unidad básica de la herencia en biología?",
+    "choices": [
+      "Gen",
+      "Célula",
+      "Proteína",
+      "Molécula"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 30,
+    "question": "¿Qué película ganó el Oscar a Mejor Película en 1994 (ganadora más conocida)?",
+    "choices": [
+      "Forrest Gump",
+      "Pulp Fiction",
+      "The Shawshank Redemption",
+      "Lion King"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 31,
+    "question": "¿Cuál es el mayor océano del planeta?",
+    "choices": [
+      "Atlántico",
+      "Índico",
+      "Pacífico",
+      "Ártico"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 32,
+    "question": "¿Qué país alberga las ruinas de Machu Picchu?",
+    "choices": [
+      "Bolivia",
+      "Perú",
+      "Ecuador",
+      "Colombia"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 33,
+    "question": "¿Qué número es primo?",
+    "choices": [
+      "21",
+      "25",
+      "29",
+      "35"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 34,
+    "question": "¿Cuál es el nombre del proceso por el que las plantas convierten luz en energía?",
+    "choices": [
+      "Respiración",
+      "Fermentación",
+      "Fotosíntesis",
+      "Transpiración"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 35,
+    "question": "¿Quién fue el primer presidente de los Estados Unidos?",
+    "choices": [
+      "Abraham Lincoln",
+      "George Washington",
+      "Thomas Jefferson",
+      "John Adams"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 36,
+    "question": "¿Qué es un agujero negro?",
+    "choices": [
+      "Una estrella que brilla intensamente",
+      "Una región del espacio con gravedad extrema",
+      "Una nube de gas",
+      "Un planeta gigante"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 37,
+    "question": "En informática, ¿qué significa 'CPU'?",
+    "choices": [
+      "Central Processing Unit",
+      "Computer Personal Unit",
+      "Control Processing Unit",
+      "Central Power Unit"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 38,
+    "question": "¿Cómo se llama el pintor español famoso por el surrealismo y obras como 'La persistencia de la memoria'?",
+    "choices": [
+      "Pablo Picasso",
+      "Salvador Dalí",
+      "Francisco Goya",
+      "Diego Velázquez"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 39,
+    "question": "¿Qué tipo de energía libera una reacción nuclear de fisión?",
+    "choices": [
+      "Energía química",
+      "Energía térmica y radiactiva",
+      "Energía sonora",
+      "Energía potencial"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 40,
+    "question": "¿Cuál es la capital de Canadá?",
+    "choices": [
+      "Toronto",
+      "Vancouver",
+      "Ottawa",
+      "Montreal"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 41,
+    "question": "¿Qué autor escribió '1984'?",
+    "choices": [
+      "Aldous Huxley",
+      "George Orwell",
+      "Ray Bradbury",
+      "J.R.R. Tolkien"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 42,
+    "question": "¿Qué ciudad es famosa por el Coliseo?",
+    "choices": [
+      "Atenas",
+      "Roma",
+      "Estambul",
+      "Jerusalén"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 43,
+    "question": "¿Cuál es el gas más abundante en la atmósfera terrestre?",
+    "choices": [
+      "Oxígeno",
+      "Dióxido de carbono",
+      "Nitrógeno",
+      "Argón"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 44,
+    "question": "¿Qué instrumento musical tiene 88 teclas en su versión estándar?",
+    "choices": [
+      "Guitarra",
+      "Violín",
+      "Piano",
+      "Trompeta"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 45,
+    "question": "¿Cuál es la principal ventaja del protocolo HTTPS frente a HTTP?",
+    "choices": [
+      "Mayores velocidades",
+      "Cifrado de la comunicación",
+      "Menor coste",
+      "Compatibilidad con navegadores"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 46,
+    "question": "¿Cómo se llama la ley que relaciona corriente, voltaje y resistencia?",
+    "choices": [
+      "Ley de Faraday",
+      "Ley de Ohm",
+      "Ley de Ampère",
+      "Ley de Newton"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 47,
+    "question": "¿Qué país ganó la Copa Mundial de la FIFA en 2018?",
+    "choices": [
+      "Brasil",
+      "Alemania",
+      "Francia",
+      "Argentina"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 48,
+    "question": "¿Cuál es el símbolo químico del sodio?",
+    "choices": [
+      "S",
+      "Sd",
+      "Na",
+      "So"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 49,
+    "question": "¿Qué técnica literaria usa la repetición de sonidos iniciales en palabras cercanas?",
+    "choices": [
+      "Metáfora",
+      "Aliteración",
+      "Hipérbole",
+      "Antítesis"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 50,
+    "question": "¿Qué descubrimiento se atribuye a Alexander Fleming?",
+    "choices": [
+      "Vacunas",
+      "Penicilina",
+      "Rayos X",
+      "Insulina"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 51,
+    "question": "¿Cuál es la capital de Argentina?",
+    "choices": [
+      "Córdoba",
+      "Rosario",
+      "Mendoza",
+      "Buenos Aires"
+    ],
+    "answer": 3
+  },
+  {
+    "id": 52,
+    "question": "¿Qué país es conocido como la Tierra del Sol Naciente?",
+    "choices": [
+      "China",
+      "Japón",
+      "Corea",
+      "Tailandia"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 53,
+    "question": "¿En computación, qué es 'HTML'?",
+    "choices": [
+      "Lenguaje de programación",
+      "Hoja de estilos",
+      "Lenguaje de marcado de hipertexto",
+      "Base de datos"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 54,
+    "question": "¿Cuál es el número áureo (aproximado)?",
+    "choices": [
+      "1.414",
+      "3.1416",
+      "1.618",
+      "2.718"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 55,
+    "question": "¿Qué famoso pintor cortó parte de su propia oreja?",
+    "choices": [
+      "Van Gogh",
+      "Picasso",
+      "Rembrandt",
+      "Monet"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 56,
+    "question": "¿Qué país organizó los Juegos Olímpicos de 2016?",
+    "choices": [
+      "China",
+      "Brasil",
+      "Reino Unido",
+      "Rusia"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 57,
+    "question": "¿Qué elemento se utiliza como base en las baterías alcalinas tradicionales?",
+    "choices": [
+      "Litio",
+      "Zinc",
+      "Carbono",
+      "Níquel"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 58,
+    "question": "¿Cuál es la capital de Egipto?",
+    "choices": [
+      "Alejandría",
+      "Luxor",
+      "El Cairo",
+      "Gizeh"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 59,
+    "question": "¿Qué obra escribió Miguel de Cervantes?",
+    "choices": [
+      "La Regenta",
+      "Don Quijote de la Mancha",
+      "El Aleph",
+      "La casa de Bernarda Alba"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 60,
+    "question": "¿Qué aparato se utiliza para medir terremotos?",
+    "choices": [
+      "Torquímetro",
+      "Sismógrafo",
+      "Barómetro",
+      "Higrómetro"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 61,
+    "question": "¿Cuál es la lengua oficial de Brasil?",
+    "choices": [
+      "Español",
+      "Portugués",
+      "Inglés",
+      "Francés"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 62,
+    "question": "¿Cuál fue el primer elemento en la tabla periódica (por número atómico)?",
+    "choices": [
+      "Helio",
+      "Hidrógeno",
+      "Carbono",
+      "Oxígeno"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 63,
+    "question": "¿Qué composer escribió la 'Primavera' de las Cuatro Estaciones?",
+    "choices": [
+      "Vivaldi",
+      "Bach",
+      "Handel",
+      "Mozart"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 64,
+    "question": "¿Cuál es el principal componente del gas natural?",
+    "choices": [
+      "Etano",
+      "Metano",
+      "Propano",
+      "Butano"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 65,
+    "question": "¿Qué país tiene forma de bota en su geografía?",
+    "choices": [
+      "Grecia",
+      "Italia",
+      "Portugal",
+      "Turquía"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 66,
+    "question": "¿Qué test mide la inteligencia en adultos de forma clásica (dicen)?",
+    "choices": [
+      "Test de Rorschach",
+      "IQ (cociente intelectual)",
+      "Test de Turing",
+      "Test de Cooper"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 67,
+    "question": "¿Quién escribió 'Hamlet'?",
+    "choices": [
+      "Christopher Marlowe",
+      "William Shakespeare",
+      "Miguel de Cervantes",
+      "Ben Jonson"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 68,
+    "question": "¿Cuál es la capital de Sudáfrica (una de las oficiales)?",
+    "choices": [
+      "Ciudad del Cabo",
+      "Johannesburgo",
+      "Pretoria",
+      "Durban"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 69,
+    "question": "¿Qué inventor desarrolló la bombilla incandescente tal como la conocemos (comercialmente) en el siglo XIX?",
+    "choices": [
+      "Nikola Tesla",
+      "Thomas Edison",
+      "Guglielmo Marconi",
+      "Alexander Graham Bell"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 70,
+    "question": "¿Qué país usa el won como moneda?",
+    "choices": [
+      "China",
+      "Corea del Sur",
+      "Japón",
+      "Vietnam"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 71,
+    "question": "¿Cuál es el principal órgano del sistema circulatorio humano?",
+    "choices": [
+      "Pulmones",
+      "Corazón",
+      "Hígado",
+      "Riñón"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 72,
+    "question": "¿Qué tipo de triángulo tiene todos sus lados de diferente longitud?",
+    "choices": [
+      "Equilátero",
+      "Isósceles",
+      "Escaleno",
+      "Rectángulo"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 73,
+    "question": "¿Quién escribió 'El Principito'?",
+    "choices": [
+      "Antoine de Saint-Exupéry",
+      "Jules Verne",
+      "Victor Hugo",
+      "Albert Camus"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 74,
+    "question": "¿Cuál es la capital de Nigeria?",
+    "choices": [
+      "Lagos",
+      "Abuja",
+      "Kano",
+      "Ibadan"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 75,
+    "question": "¿Qué planeta tiene anillos visibles desde la Tierra con telescopio?",
+    "choices": [
+      "Marte",
+      "Venus",
+      "Saturno",
+      "Mercurio"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 76,
+    "question": "¿Qué país es conocido por el sushi tradicional?",
+    "choices": [
+      "China",
+      "Japón",
+      "Corea",
+      "Tailandia"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 77,
+    "question": "¿Qué matemático es conocido por el teorema que relaciona los catetos y la hipotenusa en un triángulo rectángulo?",
+    "choices": [
+      "Euclides",
+      "Pitagoras",
+      "Newton",
+      "Fermat"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 78,
+    "question": "¿Qué idioma proviene del latín (familia romance)?",
+    "choices": [
+      "Alemán",
+      "Latvian",
+      "Italiano",
+      "Ruso"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 79,
+    "question": "¿Cuál es la capital de Turquía?",
+    "choices": [
+      "Estambul",
+      "Ankara",
+      "Esmirna",
+      "Bursa"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 80,
+    "question": "¿Qué dispositivo almacena datos en un ordenador de forma permanente (no volátil)?",
+    "choices": [
+      "RAM",
+      "CPU",
+      "SSD/HDD",
+      "GPU"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 81,
+    "question": "¿En qué año se lanzó el primer iPhone comercial por Apple?",
+    "choices": [
+      "2005",
+      "2007",
+      "2009",
+      "2010"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 82,
+    "question": "¿Qué escritor argentino escribió 'El Aleph'?",
+    "choices": [
+      "Jorge Luis Borges",
+      "Julio Cortázar",
+      "Adolfo Bioy Casares",
+      "Ernesto Sabato"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 83,
+    "question": "¿Cuál es la principal causa del ciclo del carbono en la Tierra?",
+    "choices": [
+      "Procesos biológicos y geológicos",
+      "La rotación terrestre",
+      "El campo magnético",
+      "La marea"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 84,
+    "question": "¿Qué ley física describe la gravitación universal entre masas?",
+    "choices": [
+      "Ley de Hooke",
+      "Ley de Newton",
+      "Ley de Coulomb",
+      "Ley de Boyle"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 85,
+    "question": "¿Cuál es el símbolo químico del hierro?",
+    "choices": [
+      "Fe",
+      "Ir",
+      "Fr",
+      "Fi"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 86,
+    "question": "¿Qué escritor ruso escribió 'Crimen y castigo'?",
+    "choices": [
+      "Tolstói",
+      "Dostoyevski",
+      "Chejov",
+      "Gógol"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 87,
+    "question": "¿Qué órgano produce la insulina en el cuerpo humano?",
+    "choices": [
+      "Hígado",
+      "Páncreas",
+      "Riñón",
+      "Bazo"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 88,
+    "question": "¿Cuál es el resultado de 9 × 7?",
+    "choices": [
+      "54",
+      "63",
+      "72",
+      "49"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 89,
+    "question": "¿Qué país es mayor productor de vino tradicionalmente?",
+    "choices": [
+      "Australia",
+      "Sudáfrica",
+      "Francia",
+      "México"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 90,
+    "question": "¿Cuál es el continente con más países reconocidos?",
+    "choices": [
+      "África",
+      "Europa",
+      "Asia",
+      "América"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 91,
+    "question": "¿Qué físico formuló las tres leyes del movimiento?",
+    "choices": [
+      "Einstein",
+      "Newton",
+      "Galileo",
+      "Kepler"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 92,
+    "question": "¿Qué país tiene la ciudad de Reykjavík como capital?",
+    "choices": [
+      "Noruega",
+      "Islandia",
+      "Finlandia",
+      "Suecia"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 93,
+    "question": "¿Qué red social popular se lanzó en 2004 y fue creada por Mark Zuckerberg?",
+    "choices": [
+      "Twitter",
+      "Facebook",
+      "Instagram",
+      "LinkedIn"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 94,
+    "question": "¿Qué substantivo en español es un sinónimo aproximado de 'abundancia'?",
+    "choices": [
+      "Escasez",
+      "Carencia",
+      "Fertilidad",
+      "Plenitud"
+    ],
+    "answer": 3
+  },
+  {
+    "id": 95,
+    "question": "¿Qué gas es esencial para la respiración humana?",
+    "choices": [
+      "Dióxido de carbono",
+      "Oxígeno",
+      "Argón",
+      "Helio"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 96,
+    "question": "¿Qué tipo de obra es 'La Casa de Bernarda Alba'?",
+    "choices": [
+      "Novela",
+      "Ensayo",
+      "Obra teatral",
+      "Poesía"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 97,
+    "question": "¿Quién pintó 'Las Meninas'?",
+    "choices": [
+      "Goya",
+      "Velázquez",
+      "Picasso",
+      "El Greco"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 98,
+    "question": "¿Qué continente es Australia también conocido como?",
+    "choices": [
+      "Oceanía",
+      "Eurasia",
+      "Antártida",
+      "África"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 99,
+    "question": "¿Qué invento se atribuye a los hermanos Wright?",
+    "choices": [
+      "Teléfono",
+      "Avión",
+      "Automóvil",
+      "Radio"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 100,
+    "question": "¿Cuál es la capital de Chile?",
+    "choices": [
+      "Santiago",
+      "Valparaíso",
+      "Concepción",
+      "Antofagasta"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 101,
+    "question": "¿Cuál es la capital de Portugal?",
+    "choices": [
+      "Oporto",
+      "Lisboa",
+      "Coimbra",
+      "Faro"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 102,
+    "question": "¿Quién escribió 'La metamorfosis'?",
+    "choices": [
+      "Franz Kafka",
+      "Albert Camus",
+      "Hermann Hesse",
+      "Thomas Mann"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 103,
+    "question": "¿Cuál es el número primo siguiente a 53?",
+    "choices": [
+      "55",
+      "57",
+      "59",
+      "61"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 104,
+    "question": "¿Qué país tiene la ciudad de Marrakech?",
+    "choices": [
+      "Argelia",
+      "Marruecos",
+      "Túnez",
+      "Libia"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 105,
+    "question": "¿Qué órgano del cuerpo produce bilis?",
+    "choices": [
+      "Páncreas",
+      "Hígado",
+      "Vesícula biliar",
+      "Riñón"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 106,
+    "question": "¿Quién pintó 'El Grito'?",
+    "choices": [
+      "Edvard Munch",
+      "Gustav Klimt",
+      "Henri Matisse",
+      "Paul Cézanne"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 107,
+    "question": "¿Cuál es la capital de Perú?",
+    "choices": [
+      "Lima",
+      "Cusco",
+      "Arequipa",
+      "Trujillo"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 108,
+    "question": "¿Qué científico propuso la ley de la gravitación universal?",
+    "choices": [
+      "Kepler",
+      "Newton",
+      "Einstein",
+      "Huygens"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 109,
+    "question": "¿Cuál es la unidad de medida de la resistencia eléctrica?",
+    "choices": [
+      "Voltio",
+      "Amperio",
+      "Ohmio",
+      "Vatio"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 110,
+    "question": "¿Qué gas es liberado en mayor cantidad por la combustión completa de hidrocarburos?",
+    "choices": [
+      "Dióxido de carbono",
+      "Monóxido de carbono",
+      "Metano",
+      "Oxígeno"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 111,
+    "question": "¿Cuál es la moneda de Suecia?",
+    "choices": [
+      "Corona sueca",
+      "Euro",
+      "Corona danesa",
+      "Corona noruega"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 112,
+    "question": "¿En qué continente está Madagascar?",
+    "choices": [
+      "África",
+      "Asia",
+      "Oceanía",
+      "América"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 113,
+    "question": "¿Cuál es el autor de 'El retrato de Dorian Gray'?",
+    "choices": [
+      "Oscar Wilde",
+      "Bram Stoker",
+      "Mary Shelley",
+      "H. G. Wells"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 114,
+    "question": "¿Qué día se celebra el Día de la Bastilla en Francia?",
+    "choices": [
+      "1 de mayo",
+      "14 de julio",
+      "4 de julio",
+      "3 de marzo"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 115,
+    "question": "¿Cuál es el metal cuyo símbolo es 'Fe'?",
+    "choices": [
+      "Plata",
+      "Hierro",
+      "Fósforo",
+      "Flúor"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 116,
+    "question": "¿Qué sistema numérico usa base 2?",
+    "choices": [
+      "Decimal",
+      "Hexadecimal",
+      "Binario",
+      "Octal"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 117,
+    "question": "¿Cuál es el idioma oficial de Argentina?",
+    "choices": [
+      "Portugués",
+      "Español",
+      "Quechua",
+      "Guaraní"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 118,
+    "question": "¿Qué instrumento se usa para medir la temperatura?",
+    "choices": [
+      "Barómetro",
+      "Termómetro",
+      "Higrómetro",
+      "Amperímetro"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 119,
+    "question": "¿Cuál es la capital de Finlandia?",
+    "choices": [
+      "Helsinki",
+      "Oslo",
+      "Estocolmo",
+      "Copenhague"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 120,
+    "question": "¿Qué pintor es autor de 'Guernica'?",
+    "choices": [
+      "Pablo Picasso",
+      "Salvador Dalí",
+      "Joan Miró",
+      "Diego Rivera"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 121,
+    "question": "¿Cuál es la fórmula del dióxido de carbono?",
+    "choices": [
+      "CO",
+      "CO2",
+      "C2O",
+      "O2C"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 122,
+    "question": "¿En qué año se lanzó la película 'Titanic' de James Cameron?",
+    "choices": [
+      "1995",
+      "1997",
+      "2000",
+      "1993"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 123,
+    "question": "¿Qué país tiene más habitantes?",
+    "choices": [
+      "India",
+      "Estados Unidos",
+      "Australia",
+      "Canadá"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 124,
+    "question": "¿Qué oceáno baña las costas de Perú?",
+    "choices": [
+      "Atlántico",
+      "Pacífico",
+      "Índico",
+      "Ártico"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 125,
+    "question": "¿Cuál es el símbolo químico del carbono?",
+    "choices": [
+      "C",
+      "Ca",
+      "Co",
+      "Cr"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 126,
+    "question": "¿Qué instrumento musical usa cuerdas y se toca con arco?",
+    "choices": [
+      "Guitarra",
+      "Piano",
+      "Violín",
+      "Flauta"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 127,
+    "question": "¿Quién escribió 'Fausto'?",
+    "choices": [
+      "Goethe",
+      "Schiller",
+      "Heine",
+      "Brecht"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 128,
+    "question": "¿Qué velocidad media (aprox.) tiene un corredor olímpico de 100 m en segundos (sprinters)?",
+    "choices": [
+      "~4 s",
+      "~10 s",
+      "~20 s",
+      "~30 s"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 129,
+    "question": "¿Cuál es la capital de Grecia?",
+    "choices": [
+      "Atenas",
+      "Tesalónica",
+      "Patras",
+      "Heraclión"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 130,
+    "question": "¿Qué científico es conocido por sus leyes del electromagnetismo (Maxwell)?",
+    "choices": [
+      "Faraday",
+      "Maxwell",
+      "Tesla",
+      "Ohm"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 131,
+    "question": "¿Cuál es la distancia aproximada entre la Tierra y la Luna en kilómetros?",
+    "choices": [
+      "384.000 km",
+      "150.000 km",
+      "1.000.000 km",
+      "12.000 km"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 132,
+    "question": "¿Qué continente es el más pequeño por superficie?",
+    "choices": [
+      "Europa",
+      "Oceanía",
+      "Antártida",
+      "América"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 133,
+    "question": "¿Qué tipo de animal es un ornitorrinco?",
+    "choices": [
+      "Reptil",
+      "Ave",
+      "Mamífero",
+      "Anfibio"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 134,
+    "question": "¿Cuál es la capital de Irlanda?",
+    "choices": [
+      "Dublín",
+      "Cork",
+      "Galway",
+      "Belfast"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 135,
+    "question": "¿Qué elemento químico tiene símbolo 'Na'?",
+    "choices": [
+      "Nitrógeno",
+      "Sodio",
+      "Neón",
+      "Níquel"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 136,
+    "question": "¿Cuál es la unidad de medida de la frecuencia?",
+    "choices": [
+      "Amperio",
+      "Hertz",
+      "Pascal",
+      "Newton"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 137,
+    "question": "¿Qué país es conocido por los tulipanes y los molinos de viento?",
+    "choices": [
+      "Bélgica",
+      "Países Bajos",
+      "Dinamarca",
+      "Suiza"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 138,
+    "question": "¿Quién escribió 'El Principito'?",
+    "choices": [
+      "Antoine de Saint-Exupéry",
+      "Victor Hugo",
+      "Albert Camus",
+      "Jean-Paul Sartre"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 139,
+    "question": "¿Qué gas utilizamos para inflar globos para que sean más ligeros que el aire?",
+    "choices": [
+      "Oxígeno",
+      "Hidrógeno",
+      "Helio",
+      "Nitrógeno"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 140,
+    "question": "¿Cuál es la capital de Chile?",
+    "choices": [
+      "Valparaíso",
+      "Santiago",
+      "Concepción",
+      "La Serena"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 141,
+    "question": "¿En qué país se encuentra la ciudad de Dubrovnik?",
+    "choices": [
+      "Croacia",
+      "Grecia",
+      "Montenegro",
+      "Eslovenia"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 142,
+    "question": "¿Cuál es el planeta más cercano al Sol?",
+    "choices": [
+      "Venus",
+      "Mercurio",
+      "Marte",
+      "Tierra"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 143,
+    "question": "¿Qué remedio antibiótico descubrió Alexander Fleming?",
+    "choices": [
+      "Aspirina",
+      "Penicilina",
+      "Insulina",
+      "Cloroformo"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 144,
+    "question": "¿Cuál es la capital de Colombia?",
+    "choices": [
+      "Medellín",
+      "Bogotá",
+      "Cali",
+      "Barranquilla"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 145,
+    "question": "¿Qué idioma es oficial en Suiza (entre otros)?",
+    "choices": [
+      "Español",
+      "Portugués",
+      "Alemán",
+      "Turco"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 146,
+    "question": "¿Qué país inventó la pizza moderna (Nápoles)?",
+    "choices": [
+      "Francia",
+      "España",
+      "Italia",
+      "Grecia"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 147,
+    "question": "¿Qué metal se utiliza principalmente en cables eléctricos por su conductividad y coste?",
+    "choices": [
+      "Aluminio",
+      "Hierro",
+      "Cobre",
+      "Oro"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 148,
+    "question": "¿Cuál es la capital de Indonesia?",
+    "choices": [
+      "Yakarta",
+      "Bali",
+      "Surabaya",
+      "Bandung"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 149,
+    "question": "¿Qué órgano regula el equilibrio y la coordinación en el cuerpo humano?",
+    "choices": [
+      "Cerebelo",
+      "Hipotálamo",
+      "Cerebro frontal",
+      "Tálamo"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 150,
+    "question": "¿Qué movimiento artístico pertenece Picasso y Braque al inicio del siglo XX?",
+    "choices": [
+      "Impresionismo",
+      "Cubismo",
+      "Surrealismo",
+      "Expresionismo"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 151,
+    "question": "¿Cuál es la principal fuente de energía renovable que depende del sol?",
+    "choices": [
+      "Geotérmica",
+      "Hidroeléctrica",
+      "Solar",
+      "Nuclear"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 152,
+    "question": "¿Quién compuso 'La flauta mágica'?",
+    "choices": [
+      "Mozart",
+      "Beethoven",
+      "Haydn",
+      "Schubert"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 153,
+    "question": "¿Qué país tiene forma alargada en la costa del Pacífico de Sudamérica?",
+    "choices": [
+      "Chile",
+      "Perú",
+      "Ecuador",
+      "Colombia"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 154,
+    "question": "¿Qué número romano representa 50?",
+    "choices": [
+      "X",
+      "L",
+      "C",
+      "V"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 155,
+    "question": "¿Cuál es el principal ingrediente del guacamole?",
+    "choices": [
+      "Tomate",
+      "Aguacate",
+      "Cebolla",
+      "Pimiento"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 156,
+    "question": "¿Qué deporte utiliza el término 'ace' para un servicio directo y ganador?",
+    "choices": [
+      "Fútbol",
+      "Baloncesto",
+      "Tenis",
+      "Boxeo"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 157,
+    "question": "¿Cuál es la capital de Noruega?",
+    "choices": [
+      "Oslo",
+      "Bergen",
+      "Trondheim",
+      "Stavanger"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 158,
+    "question": "¿Qué químico propuso la tabla periódica moderna (orden por número atómico)?",
+    "choices": [
+      "Mendeleiev",
+      "Dmitri Mendeleev",
+      "Henry Moseley",
+      "John Dalton"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 159,
+    "question": "¿En qué país se encuentra la península de Yucatán?",
+    "choices": [
+      "México",
+      "Belice",
+      "Guatemala",
+      "Honduras"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 160,
+    "question": "¿Qué animal es conocido por su memoria y capacidad para resolver problemas (grande y gris)?",
+    "choices": [
+      "Tigre",
+      "Elefante",
+      "Cocodrilo",
+      "Rinoceronte"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 161,
+    "question": "¿Cuál es la capital de Bélgica?",
+    "choices": [
+      "Brujas",
+      "Amberes",
+      "Bruselas",
+      "Gante"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 162,
+    "question": "¿Qué escritor creó al detective Sherlock Holmes?",
+    "choices": [
+      "Agatha Christie",
+      "Arthur Conan Doyle",
+      "Edgar Allan Poe",
+      "Raymond Chandler"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 163,
+    "question": "¿Qué país es famoso por la torre inclinada de Pisa?",
+    "choices": [
+      "Italia",
+      "Francia",
+      "España",
+      "Grecia"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 164,
+    "question": "¿Cuál es el principal componente del acero?",
+    "choices": [
+      "Carbono y hierro",
+      "Plomo",
+      "Cobre",
+      "Aluminio"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 165,
+    "question": "¿Qué científico desarrolló la teoría del Big Bang (concepto popularizado)?",
+    "choices": [
+      "Edwin Hubble",
+      "George Lemaitre",
+      "Stephen Hawking",
+      "Carl Sagan"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 166,
+    "question": "¿Qué instrumento se utiliza para observar estrellas y galaxias?",
+    "choices": [
+      "Microscopio",
+      "Telescopio",
+      "Barómetro",
+      "Sismógrafo"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 167,
+    "question": "¿Qué país celebró la Expo Universal de 2010 en Shanghai?",
+    "choices": [
+      "Japón",
+      "China",
+      "Corea del Sur",
+      "Singapur"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 168,
+    "question": "¿Qué animal construye presas en ríos y lagos?",
+    "choices": [
+      "Nutria",
+      "Castor",
+      "Castorillo",
+      "Beaver (inglés)"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 169,
+    "question": "¿Cuál es la capital de Hungría?",
+    "choices": [
+      "Budapest",
+      "Praga",
+      "Bratislava",
+      "Bucarest"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 170,
+    "question": "¿Qué molécula porta la información genética en la mayoría de los seres vivos?",
+    "choices": [
+      "ARN",
+      "ADN",
+      "Proteína",
+      "Lípido"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 171,
+    "question": "¿Qué fiesta tradicional japonesa celebra los cerezos en flor?",
+    "choices": [
+      "Hanami",
+      "Tanabata",
+      "Obon",
+      "Setsubun"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 172,
+    "question": "¿Cuál es la capital de Turquía?",
+    "choices": [
+      "Estambul",
+      "Ankara",
+      "Izmir",
+      "Antalya"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 173,
+    "question": "¿Quién escribió 'Rayuela'?",
+    "choices": [
+      "Mario Vargas Llosa",
+      "Julio Cortázar",
+      "Jorge Luis Borges",
+      "Gabriel García Márquez"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 174,
+    "question": "¿Cuál es la distancia en metros de una maratón oficial?",
+    "choices": [
+      "40.000 m",
+      "42.195 m",
+      "45.000 m",
+      "50.000 m"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 175,
+    "question": "¿Qué país fue el primero en dar el derecho al voto a las mujeres (a nivel nacional)?",
+    "choices": [
+      "Nueva Zelanda",
+      "Reino Unido",
+      "Estados Unidos",
+      "Francia"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 176,
+    "question": "¿Qué tipo de triángulo tiene un ángulo recto?",
+    "choices": [
+      "Equilátero",
+      "Isósceles",
+      "Rectángulo (rectángulo no es tipo)",
+      "Rectángulo/Rectángulo no es correcto"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 177,
+    "question": "¿Cuál es la moneda oficial de Rusia?",
+    "choices": [
+      "Rublo",
+      "Ruble (var.)",
+      "Euro",
+      "Dólar"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 178,
+    "question": "¿Qué escritor escribió 'El coronel no tiene quien le escriba'?",
+    "choices": [
+      "Mario Benedetti",
+      "Gabriel García Márquez",
+      "Julio Cortázar",
+      "Ernesto Sabato"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 179,
+    "question": "¿Qué metal precioso tiene el símbolo 'Ag'?",
+    "choices": [
+      "Oro",
+      "Plata",
+      "Platino",
+      "Paladio"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 180,
+    "question": "¿Qué continente contiene el desierto del Sahara?",
+    "choices": [
+      "Asia",
+      "África",
+      "América del Sur",
+      "Oceanía"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 181,
+    "question": "¿Qué deporte usa términos como 'birdie' y 'par'?",
+    "choices": [
+      "Tenis",
+      "Golf",
+      "Bádminton",
+      "Cricket"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 182,
+    "question": "¿Cuál es la capital de Polonia?",
+    "choices": [
+      "Cracovia",
+      "Varsovia",
+      "Gdansk",
+      "Wroclaw"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 183,
+    "question": "¿Qué obra musical compuso Vivaldi conocida por estaciones?",
+    "choices": [
+      "La Primavera",
+      "La Quinta Sinfonía",
+      "El Lago de los Cisnes",
+      "La Boheme"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 184,
+    "question": "¿Qué famoso científico estudió la evolución por selección natural?",
+    "choices": [
+      "Gregor Mendel",
+      "Charles Darwin",
+      "Louis Pasteur",
+      "Alexander Fleming"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 185,
+    "question": "¿Cuál es el país más grande de África por superficie?",
+    "choices": [
+      "Argelia",
+      "Sudán",
+      "Congo",
+      "Sudáfrica"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 186,
+    "question": "¿Qué órgano produce orina en el cuerpo humano?",
+    "choices": [
+      "Hígado",
+      "Riñones",
+      "Pulmones",
+      "Intestino"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 187,
+    "question": "¿Qué idioma se habla predominantemente en Quebec (Canadá)?",
+    "choices": [
+      "Inglés",
+      "Francés",
+      "Español",
+      "Alemán"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 188,
+    "question": "¿Qué festival de cine se celebra en Cannes?",
+    "choices": [
+      "Berlinale",
+      "Cannes",
+      "Venecia",
+      "Sundance"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 189,
+    "question": "¿Qué gas se usa en extintores de incendios comunes (CO2)?",
+    "choices": [
+      "Oxígeno",
+      "Dióxido de carbono",
+      "Hidrógeno",
+      "Metano"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 190,
+    "question": "¿Cuál es la capital de Hungría?",
+    "choices": [
+      "Debrecen",
+      "Szeged",
+      "Budapest",
+      "Pécs"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 191,
+    "question": "¿Qué autor escribió 'Los miserables'?",
+    "choices": [
+      "Victor Hugo",
+      "Émile Zola",
+      "Gustave Flaubert",
+      "Honoré de Balzac"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 192,
+    "question": "¿Qué planeta tiene mayor gravedad superficial que la Tierra?",
+    "choices": [
+      "Mercurio",
+      "Marte",
+      "Júpiter",
+      "Venus"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 193,
+    "question": "¿Cuál es la capital de Nueva Zelanda?",
+    "choices": [
+      "Auckland",
+      "Wellington",
+      "Christchurch",
+      "Dunedin"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 194,
+    "question": "¿Qué técnica pictórica utiliza la mezcla de puntos de color (puntillismo)?",
+    "choices": [
+      "Cubismo",
+      "Impresionismo",
+      "Puntillismo",
+      "Expresionismo"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 195,
+    "question": "¿Quién fue el primer hombre en orbitar la Tierra?",
+    "choices": [
+      "Neil Armstrong",
+      "Yuri Gagarin",
+      "Alan Shepard",
+      "John Glenn"
+    ],
+    "answer": 1
+  },
+  {
+    "id": 196,
+    "question": "¿Qué vitamina es producida por la piel con la ayuda del sol?",
+    "choices": [
+      "Vitamina A",
+      "Vitamina C",
+      "Vitamina D",
+      "Vitamina B12"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 197,
+    "question": "¿Qué científico propuso las leyes del movimiento y la gravitación?",
+    "choices": [
+      "Newton",
+      "Kepler",
+      "Galileo",
+      "Descartes"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 198,
+    "question": "¿Cuál es la capital de Egipto?",
+    "choices": [
+      "El Cairo",
+      "Luxor",
+      "Alejandría",
+      "Asuán"
+    ],
+    "answer": 0
+  },
+  {
+    "id": 199,
+    "question": "¿Qué país tiene el mayor número de islas en el mundo?",
+    "choices": [
+      "Indonesia",
+      "Filipinas",
+      "Suecia",
+      "Canadá"
+    ],
+    "answer": 2
+  },
+  {
+    "id": 200,
+    "question": "¿Qué personaje literario creó Miguel de Cervantes?",
+    "choices": [
+      "Raskólnikov",
+      "Don Quijote",
+      "Hamlet",
+      "Fausto"
+    ],
+    "answer": 1
+  }
 ]
