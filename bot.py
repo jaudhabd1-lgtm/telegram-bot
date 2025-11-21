@@ -2073,21 +2073,25 @@ async def trivia_poll_answer_handler(update: Update, context: ContextTypes.DEFAU
 
 
 async def trivia_poll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Se llama cuando el poll de trivia cambia de estado (cerrado, etc.)."""
     poll = update.poll
     if not poll:
         return
+
+    # Només actuar quan el poll REALMENT està tancat
+    if not poll.is_closed:
+        return
+
     poll_id = str(poll.id)
     state = load_trivia_state()
     info = state.get(poll_id)
     if not info:
         return
 
+    # Si ja estava marcat com finished, no fem res
     if info.get("finished"):
-        # Ya gestionado al encontrar ganador
         return
 
-    # Poll cerrado sin ganador
+    # Marquem com finalitzada (sense guanyador)
     info["finished"] = True
     state[poll_id] = info
     save_trivia_state(state)
@@ -2105,7 +2109,7 @@ async def trivia_poll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"No ha habido ningún ganador.\\nLa respuesta correcta era {letra}) {correct_text}.",
+                text=f"No ha habido ningún ganador.\nLa respuesta correcta era {letra}) {correct_text}.",
             )
         except Exception:
             logging.exception("Error anunciando respuesta correcta sin ganador")
