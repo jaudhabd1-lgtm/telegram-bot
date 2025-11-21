@@ -2446,7 +2446,16 @@ def main():
     _ensure_trivia_files()
     app = ApplicationBuilder().token(TOKEN).build()
     ensure_import_once()
+
+    # Crear manualment JobQueue per PTB 21
+    if app.job_queue is None:
+        from telegram.ext import JobQueue
+        jq = JobQueue()
+        jq.set_application(app)
+        app.job_queue = jq
+
     _setup_trivia_scheduler(app)
+
 
     # START / HELP / CONFIG
     app.add_handler(CommandHandler("start", start_cmd))
