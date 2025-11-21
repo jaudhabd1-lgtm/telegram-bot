@@ -188,14 +188,14 @@
   },
   {
     "id": 18,
-    "question": "¿Qué gas tienen en común las plantas y los humanos en la respiración/fotosíntesis (resumido)?,",
+    "question": "¿Qué gas utilizan las plantas en la fotosíntesis y expulsan los humanos al respirar?",
     "choices": [
-      "Dióxido de carbono",
       "Oxígeno",
+      "Dióxido de carbono",
       "Nitrógeno",
-      "Metano"
+      "Hidrógeno"
     ],
-    "answer": 0
+    "answer": 1
   },
   {
     "id": 19,
@@ -1398,12 +1398,12 @@
   },
   {
     "id": 128,
-    "question": "¿Qué velocidad media (aprox.) tiene un corredor olímpico de 100 m en segundos (sprinters)?",
+    "question": "¿Cuánto tarda aproximadamente un velocista olímpico en correr 100 metros?",
     "choices": [
-      "~4 s",
+      "~8 s",
       "~10 s",
-      "~20 s",
-      "~30 s"
+      "~12 s",
+      "~15 s"
     ],
     "answer": 1
   },
@@ -1930,10 +1930,10 @@
     "choices": [
       "Equilátero",
       "Isósceles",
-      "Rectángulo (rectángulo no es tipo)",
-      "Rectángulo/Rectángulo no es correcto"
+      "Rectángulo",
+      "Escaleno"
     ],
-    "answer": 1
+    "answer": 2
   },
   {
     "id": 177,
