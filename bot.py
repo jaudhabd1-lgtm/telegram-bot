@@ -1,3 +1,4 @@
+# (Contenido completo del fichero actualizado - optimizado)
 import os
 import json
 import time
@@ -19,7 +20,7 @@ from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters
+    CallbackQueryHandler, PollAnswerHandler, PollHandler, ContextTypes, filters
 )
 
 # =========================
@@ -1517,6 +1518,643 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+
+# =========================
+# TRIVIA
+# =========================
+
+TRIVIA_POOL_FILE = os.path.join(PERSIST_DIR, "pool.json")
+TRIVIA_STATE_FILE = os.path.join(PERSIST_DIR, "trivia_state.json")
+TRIVIA_STATS_FILE = os.path.join(PERSIST_DIR, "trivia_stats.json")
+TRIVIA_ADMIN_LOG_FILE = os.path.join(PERSIST_DIR, "trivia_admin_log.json")
+TRIVIA_BACKUP_DIR = os.path.join(PERSIST_DIR, "backups")
+
+
+def _ensure_trivia_files() -> None:
+    """Crea directorios y ficheros mínimos para Trivia."""
+    try:
+        os.makedirs(PERSIST_DIR, exist_ok=True)
+        os.makedirs(TRIVIA_BACKUP_DIR, exist_ok=True)
+    except Exception:
+        logging.exception("Error creando directorios de Trivia")
+
+    def _ensure(path: str, default):
+        if not os.path.exists(path):
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(default, f, ensure_ascii=False, indent=2)
+            except Exception:
+                logging.exception("Error creando fichero de Trivia: %s", path)
+
+    _ensure(TRIVIA_POOL_FILE, [])
+    _ensure(TRIVIA_STATE_FILE, {})
+    _ensure(TRIVIA_STATS_FILE, {})
+    _ensure(TRIVIA_ADMIN_LOG_FILE, {"entries": []})
+
+
+def _load_json_file(path: str, default):
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+    except Exception:
+        logging.exception("Error leyendo JSON: %s", path)
+        return default
+
+
+def _save_json_file(path: str, data) -> None:
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logging.exception("Error guardando JSON: %s", path)
+
+
+def load_pool() -> list[dict]:
+    return _load_json_file(TRIVIA_POOL_FILE, [])
+
+
+def save_pool(pool: list[dict]) -> None:
+    _save_json_file(TRIVIA_POOL_FILE, pool)
+
+
+def backup_pool() -> str | None:
+    """Crea un backup timestamped del pool y devuelve la ruta."""
+    try:
+        os.makedirs(TRIVIA_BACKUP_DIR, exist_ok=True)
+        ts = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        dest = os.path.join(TRIVIA_BACKUP_DIR, f"pool_backup_{ts}.json")
+        src_data = load_pool()
+        _save_json_file(dest, src_data)
+        return dest
+    except Exception:
+        logging.exception("Error creando backup de pool")
+        return None
+
+
+def _validate_pool_list(raw) -> list[dict]:
+    """Valida y normaliza una lista de preguntas de Trivia."""
+    if not isinstance(raw, list):
+        raise ValueError("El JSON importado debe ser una lista de preguntas.")
+    norm: list[dict] = []
+    for idx, item in enumerate(raw, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"Pregunta #{idx} no es un objeto.")
+        q = item.get("question")
+        choices = item.get("choices")
+        ans = item.get("answer")
+        qid = item.get("id")
+        if not isinstance(q, str) or not q.strip():
+            raise ValueError(f"Pregunta #{idx}: 'question' debe ser texto no vacío.")
+        if not isinstance(choices, list) or len(choices) < 2:
+            raise ValueError(f"Pregunta #{idx}: 'choices' debe ser una lista con al menos 2 opciones.")
+        clean_choices: list[str] = []
+        for c in choices:
+            if not isinstance(c, str) or not c.strip():
+                raise ValueError(f"Pregunta #{idx}: todas las opciones deben ser texto no vacío.")
+            clean_choices.append(c.strip())
+        if not isinstance(ans, int) or not (0 <= ans < len(clean_choices)):
+            raise ValueError(f"Pregunta #{idx}: 'answer' debe ser un índice entero válido.")
+        if qid is not None and not isinstance(qid, int):
+            raise ValueError(f"Pregunta #{idx}: 'id' debe ser un entero si se proporciona.")
+        norm.append({
+            "id": qid,
+            "question": q.strip(),
+            "choices": clean_choices,
+            "answer": ans,
+        })
+    return norm
+
+
+def load_trivia_state() -> dict:
+    return _load_json_file(TRIVIA_STATE_FILE, {})
+
+
+def save_trivia_state(state: dict) -> None:
+    _save_json_file(TRIVIA_STATE_FILE, state)
+
+
+def load_trivia_stats() -> dict:
+    return _load_json_file(TRIVIA_STATS_FILE, {})
+
+
+def save_trivia_stats(stats: dict) -> None:
+    _save_json_file(TRIVIA_STATS_FILE, stats)
+
+
+def log_admin_action(action: str, admin_id: int, detail: dict) -> None:
+    log = _load_json_file(TRIVIA_ADMIN_LOG_FILE, {"entries": []})
+    if "entries" not in log or not isinstance(log["entries"], list):
+        log = {"entries": []}
+    entry = {
+        "ts": datetime.utcnow().isoformat(),
+        "admin_id": admin_id,
+        "accion": action,
+        "detalle": detail,
+    }
+    log["entries"].append(entry)
+    _save_json_file(TRIVIA_ADMIN_LOG_FILE, log)
+
+
+# =========================
+# COMANDOS TRIVIA: IMPORT
+# =========================
+
+async def trivia_import_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Importa preguntas de Trivia desde una URL (merge|replace)."""
+    msg = update.message
+    if not msg:
+        return
+    chat = msg.chat
+    user = msg.from_user
+    if not user:
+        return
+
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo un administrador puede usar /trivia_import.")
+        return
+
+    if not context.args:
+        await msg.reply_text("Uso: /trivia_import <url> [merge|replace]")
+        return
+
+    url = context.args[0]
+    mode = (context.args[1].lower() if len(context.args) > 1 else "merge")
+    if mode not in {"merge", "replace"}:
+        await msg.reply_text("Modo inválido. Usa 'merge' o 'replace'.")
+        return
+
+    # Descargar JSON
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=20) as resp:
+            raw_data = resp.read().decode("utf-8")
+        data = json.loads(raw_data)
+    except Exception as e:
+        logging.exception("Error descargando/importando trivia")
+        await msg.reply_text(f"Error al descargar o parsear el JSON: {e}")
+        return
+
+    try:
+        preguntas = _validate_pool_list(data)
+    except Exception as e:
+        await msg.reply_text(f"Error de validación del pool: {e}")
+        return
+
+    count = len(preguntas)
+    context.user_data["pending_trivia_import"] = {
+        "chat_id": chat.id,
+        "mode": mode,
+        "url": url,
+        "preguntas": preguntas,
+        "count": count,
+        "initiator_id": user.id,
+    }
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "✅ Confirmar importación",
+                callback_data=f"triviaimport:{chat.id}:yes:{mode}:{user.id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ Cancelar",
+                callback_data=f"triviaimport:{chat.id}:no:0:{user.id}",
+            ),
+        ],
+    ])
+    await msg.reply_text(
+        f"Se han cargado {count} preguntas desde la URL.\\n"
+        f"Modo: {mode.upper()}.\\n\\n"
+        "Pulsa “Confirmar importación” para aplicar los cambios.",
+        reply_markup=kb,
+    )
+
+
+async def trivia_import_confirm_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback de confirmación/cancelación de importación de Trivia."""
+    query = update.callback_query
+    if not query or not query.data:
+        return
+    parts = query.data.split(":")
+    if len(parts) != 5 or parts[0] != "triviaimport":
+        return
+
+    _chat_id = int(parts[1])
+    decision = parts[2]
+    mode = parts[3]
+    initiator_id = int(parts[4])
+
+    user = query.from_user
+    msg_chat = query.message.chat if query.message else None
+
+    if not user or not msg_chat:
+        await safe_q_answer(query)
+        return
+
+    if user.id != initiator_id:
+        await safe_q_answer(query, "Solo puede confirmar quien inició la importación.", show_alert=True)
+        return
+
+    pending = context.user_data.get("pending_trivia_import")
+    if not pending or pending.get("chat_id") != msg_chat.id:
+        await safe_q_answer(query, "No hay una importación pendiente.", show_alert=True)
+        return
+
+    if decision == "no":
+        context.user_data.pop("pending_trivia_import", None)
+        await safe_q_answer(query, "Importación cancelada.")
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+
+    # decision == "yes"
+    preguntas = pending["preguntas"]
+    url = pending["url"]
+    mode = pending["mode"]
+    count = pending["count"]
+
+    old_pool = load_pool()
+    backup_path = backup_pool()
+
+    # Construir nuevo pool según modo
+    new_pool: list[dict] = []
+    if mode == "replace":
+        # Reasignar IDs secuenciales
+        for i, q in enumerate(preguntas, start=1):
+            new_pool.append({
+                "id": i,
+                "question": q["question"],
+                "choices": q["choices"],
+                "answer": q["answer"],
+            })
+        added = len(new_pool)
+        updated = 0
+    else:
+        # merge
+        by_id: dict[int, dict] = {}
+        max_id = 0
+        for q in old_pool:
+            qid = q.get("id")
+            if isinstance(qid, int):
+                by_id[qid] = q
+                if qid > max_id:
+                    max_id = qid
+        added = 0
+        updated = 0
+        for q in preguntas:
+            qid = q.get("id")
+            if isinstance(qid, int) and qid in by_id:
+                by_id[qid] = {
+                    "id": qid,
+                    "question": q["question"],
+                    "choices": q["choices"],
+                    "answer": q["answer"],
+                }
+                updated += 1
+            else:
+                max_id += 1
+                by_id[max_id] = {
+                    "id": max_id,
+                    "question": q["question"],
+                    "choices": q["choices"],
+                    "answer": q["answer"],
+                }
+                added += 1
+        new_pool = [by_id[k] for k in sorted(by_id.keys())]
+
+    save_pool(new_pool)
+    context.user_data.pop("pending_trivia_import", None)
+
+    log_admin_action(
+        f"trivia_import_{mode}",
+        admin_id=user.id,
+        detail={
+            "url": url,
+            "count": count,
+            "added": added,
+            "updated": updated,
+            "backup": backup_path,
+        },
+    )
+
+    await safe_q_answer(query)
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    if mode == "replace":
+        txt = f"Pool reemplazado con éxito ({len(new_pool)} preguntas)."
+    else:
+        txt = f"Importación MERGE completada. Añadidas: {added}. Actualizadas: {updated}."
+    if backup_path:
+        txt += f"\\nBackup: {backup_path}"
+    await query.message.reply_text(txt)
+
+
+# =========================
+# LÓGICA DE RONDAS DE TRIVIA
+# =========================
+
+async def _start_trivia_round(context: ContextTypes.DEFAULT_TYPE, chat_id: int, started_by: int | None = None, automated: bool = False):
+    """Lanza una ronda de Trivia en un chat concreto."""
+    # Comprobar módulo activo
+    if not is_module_enabled(chat_id, "trivia_enabled"):
+        return
+
+    pool = load_pool()
+    valid = [q for q in pool if isinstance(q, dict) and q.get("question") and isinstance(q.get("choices"), list)]
+    if not valid:
+        # Si se llama desde comando, informar; si es automático, solo log.
+        if not automated:
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="No hay preguntas de trivia disponibles. Usa /trivia_import para importar un pool.")
+            except Exception:
+                logging.exception("Error enviando aviso de pool vacío")
+        else:
+            logging.info("Trivia automática omitida en %s: pool vacío.", chat_id)
+        return
+
+    pregunta = random.choice(valid)
+    question_text = pregunta["question"]
+    choices = pregunta["choices"]
+    correct_index = int(pregunta["answer"])
+    qid = pregunta.get("id")
+
+    intro = None
+    try:
+        intro = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🎲 Nueva ronda de trivia: responde lo más rápido que puedas (tienes 5 minutos).",
+        )
+        poll_msg = await context.bot.send_poll(
+            chat_id=chat_id,
+            question=question_text,
+            options=choices,
+            type="quiz",
+            correct_option_id=correct_index,
+            is_anonymous=False,
+            open_period=300,
+        )
+    except Exception:
+        logging.exception("Error enviando poll de trivia")
+        return
+
+    poll_id = poll_msg.poll.id
+    state = load_trivia_state()
+    state[str(poll_id)] = {
+        "chat_id": chat_id,
+        "message_id_poll": poll_msg.message_id,
+        "message_id_intro": intro.message_id if intro else None,
+        "question_id": qid,
+        "started_at": datetime.utcnow().isoformat(),
+        "finished": False,
+        "winner": None,
+        "answers": {},
+        "question_snapshot": {
+            "question": question_text,
+            "choices": choices,
+            "answer": correct_index,
+        },
+    }
+    save_trivia_state(state)
+
+
+async def trivia_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin: inicia una ronda de trivia en este chat."""
+    msg = update.message
+    if not msg:
+        return
+    chat = msg.chat
+    user = msg.from_user
+    if not user:
+        return
+
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo un administrador puede usar /trivia_start.")
+        return
+    if not is_module_enabled(chat.id, "trivia_enabled"):
+        await msg.reply_text("El módulo de Trivia está desactivado en este chat.")
+        return
+
+    await _start_trivia_round(context, chat.id, started_by=user.id, automated=False)
+    await msg.reply_text("Ronda de trivia iniciada.")
+
+
+async def trivia_stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin: detiene la ronda de trivia activa en este chat y muestra la respuesta."""
+    msg = update.message
+    if not msg:
+        return
+    chat = msg.chat
+    user = msg.from_user
+    if not user:
+        return
+
+    if not await is_admin(context, chat.id, user.id):
+        await msg.reply_text("Solo un administrador puede usar /trivia_stop.")
+        return
+
+    state = load_trivia_state()
+    active_key = None
+    active = None
+    for pid, info in state.items():
+        if info.get("chat_id") == chat.id and not info.get("finished"):
+            active_key = pid
+            active = info
+            break
+    if not active:
+        await msg.reply_text("No hay ninguna ronda de trivia activa en este chat.")
+        return
+
+    snapshot = active.get("question_snapshot") or {}
+    correct_index = snapshot.get("answer")
+    choices = snapshot.get("choices") or []
+    correct_text = None
+    if isinstance(correct_index, int) and 0 <= correct_index < len(choices):
+        correct_text = choices[correct_index]
+
+    try:
+        await context.bot.stop_poll(chat_id=chat.id, message_id=active["message_id_poll"])
+    except Exception:
+        logging.exception("Error al detener el poll de trivia")
+
+    active["finished"] = True
+    state[active_key] = active
+    save_trivia_state(state)
+
+    if correct_text is not None:
+        letra = chr(ord("A") + correct_index)
+        await msg.reply_text(f"Ronda detenida. La respuesta correcta era {letra}) {correct_text}.")
+    else:
+        await msg.reply_text("Ronda detenida. (No he podido determinar la respuesta correcta).")
+
+
+# =========================
+# HANDLERS DE POLL
+# =========================
+
+async def trivia_poll_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Registra respuestas a polls de trivia y detecta ganador."""
+    pa = update.poll_answer
+    if not pa:
+        return
+    poll_id = str(pa.poll_id)
+    user_id = pa.user.id if pa.user else None
+    if user_id is None:
+        return
+    selected = pa.option_ids[0] if pa.option_ids else None
+    if selected is None:
+        return
+
+    state = load_trivia_state()
+    info = state.get(poll_id)
+    if not info:
+        return
+
+    answers = info.get("answers") or {}
+    # Registrar (última respuesta del usuario)
+    answers[str(user_id)] = {
+        "choice_index": int(selected),
+        "answered_at": datetime.utcnow().isoformat(),
+    }
+    info["answers"] = answers
+
+    snapshot = info.get("question_snapshot") or {}
+    correct_index = snapshot.get("answer")
+    winner = info.get("winner")
+    finished = info.get("finished", False)
+
+    if winner is None and not finished and isinstance(correct_index, int) and correct_index == int(selected):
+        # Primer acierto
+        info["winner"] = user_id
+        info["finished"] = True
+        state[poll_id] = info
+        save_trivia_state(state)
+
+        chat_id = info.get("chat_id")
+        message_id_poll = info.get("message_id_poll")
+        # Intentar cerrar el poll
+        try:
+            if chat_id and message_id_poll:
+                await context.bot.stop_poll(chat_id=chat_id, message_id=message_id_poll)
+        except Exception:
+            logging.exception("Error haciendo stop_poll al encontrar ganador de trivia")
+
+        # Anunciar ganador
+        try:
+            chat_id = info.get("chat_id")
+            correct_text = None
+            choices = snapshot.get("choices") or []
+            if 0 <= correct_index < len(choices):
+                correct_text = choices[correct_index]
+            letra = chr(ord("A") + correct_index) if isinstance(correct_index, int) else "?"
+            mention = f'<a href="tg://user?id={user_id}">{html.escape(pa.user.full_name)}</a>'
+            txt = f"¡El ganador ha sido {mention}!\\n"
+            if correct_text is not None:
+                txt += f"La respuesta correcta era {letra}) {correct_text}.\\n"
+            txt += "+1 punto simbólico. 😄"
+            if chat_id:
+                await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
+        except Exception:
+            logging.exception("Error anunciando ganador de trivia")
+    else:
+        # Solo registrar intento
+        state[poll_id] = info
+        save_trivia_state(state)
+
+
+async def trivia_poll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Se llama cuando el poll de trivia cambia de estado (cerrado, etc.)."""
+    poll = update.poll
+    if not poll:
+        return
+    poll_id = str(poll.id)
+    state = load_trivia_state()
+    info = state.get(poll_id)
+    if not info:
+        return
+
+    if info.get("finished"):
+        # Ya gestionado al encontrar ganador
+        return
+
+    # Poll cerrado sin ganador
+    info["finished"] = True
+    state[poll_id] = info
+    save_trivia_state(state)
+
+    snapshot = info.get("question_snapshot") or {}
+    correct_index = snapshot.get("answer")
+    choices = snapshot.get("choices") or []
+    correct_text = None
+    if isinstance(correct_index, int) and 0 <= correct_index < len(choices):
+        correct_text = choices[correct_index]
+
+    chat_id = info.get("chat_id")
+    if chat_id and correct_text is not None:
+        letra = chr(ord("A") + correct_index)
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"No ha habido ningún ganador.\\nLa respuesta correcta era {letra}) {correct_text}.",
+            )
+        except Exception:
+            logging.exception("Error anunciando respuesta correcta sin ganador")
+
+
+# =========================
+# SCHEDULER AUTOMÁTICO
+# =========================
+
+async def scheduled_trivia_job(context: ContextTypes.DEFAULT_TYPE):
+    """Job que intenta lanzar una trivia automática en cada chat con trivia_enabled."""
+    roster = load_roster()
+    state = load_trivia_state()
+
+    # Construir índice de polls activos por chat
+    activos_por_chat: dict[int, bool] = {}
+    for info in state.values():
+        if not isinstance(info, dict):
+            continue
+        cid = info.get("chat_id")
+        if isinstance(cid, int) and not info.get("finished"):
+            activos_por_chat[cid] = True
+
+    for chat_id_str in roster.keys():
+        try:
+            chat_id = int(chat_id_str)
+        except ValueError:
+            continue
+        if not is_module_enabled(chat_id, "trivia_enabled"):
+            continue
+        if activos_por_chat.get(chat_id):
+            # Ya hay ronda activa en este chat
+            continue
+        # Lanzar trivia de forma no bloqueante
+        asyncio.create_task(_start_trivia_round(context, chat_id, started_by=None, automated=True))
+
+
+def _setup_trivia_scheduler(app) -> None:
+    """Configura el job_queue para lanzar Trivia automática cada hora a y 30 (UTC)."""
+    from datetime import timedelta, timezone
+
+    jq = app.job_queue
+    now = datetime.now(timezone.utc)
+    first_run = now.replace(minute=30, second=0, microsecond=0)
+    if first_run <= now:
+        first_run = first_run + timedelta(hours=1)
+    jq.run_repeating(scheduled_trivia_job, interval=3600, first=first_run)
+
+
 # =========================
 # ERROR HANDLER
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1805,8 +2443,10 @@ async def hub_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Added inside main via dynamic injection
 
 def main():
+    _ensure_trivia_files()
     app = ApplicationBuilder().token(TOKEN).build()
     ensure_import_once()
+    _setup_trivia_scheduler(app)
 
     # START / HELP / CONFIG
     app.add_handler(CommandHandler("start", start_cmd))
@@ -1815,6 +2455,14 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_show_help, pattern=r"^show_help$"))
     app.add_handler(CallbackQueryHandler(hub_router, pattern=r"^hub:"))
     app.add_handler(CallbackQueryHandler(cfg_callback, pattern=r"^cfg:"))
+    # TRIVIA
+    app.add_handler(CommandHandler("trivia_import", trivia_import_cmd))
+    app.add_handler(CallbackQueryHandler(trivia_import_confirm_cb, pattern=r"^triviaimport:"))
+    app.add_handler(CommandHandler("trivia_start", trivia_start_cmd))
+    app.add_handler(CommandHandler("trivia_stop", trivia_stop_cmd))
+    app.add_handler(PollAnswerHandler(trivia_poll_answer_handler))
+    app.add_handler(PollHandler(trivia_poll_handler))
+
 
     # AFK
     app.add_handler(CommandHandler("afk", afk_cmd))
@@ -1867,6 +2515,11 @@ def main():
     register_command("ttt", "inicia una partida de tres en raya (responde a alguien o usa @usuario opcionalmente)")
     register_command("tres", "alias de /ttt para iniciar tres en raya")
     register_command("top_ttt", "muestra el ranking de tres en raya (wins/draws/losses)")
+
+
+    register_command("trivia_import", "importa un pool de preguntas desde una URL (merge|replace)", admin=True)
+    register_command("trivia_start", "inicia una ronda de trivia en este chat", admin=True)
+    register_command("trivia_stop", "detiene la ronda de trivia activa y muestra la respuesta correcta", admin=True)
 
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
