@@ -1216,6 +1216,24 @@ async def top_ttt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     metric = (context.args[0].lower() if context.args else "wins")
     await context.bot.send_message(chat_id=msg.chat.id, text=_ttt_stats_top(msg.chat.id, metric))
+async def trivia_top_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    chat_id = msg.chat.id
+    stats = load_trivia_stats().get(str(chat_id), {})
+    if not stats:
+        return await msg.reply_text("Aún no hay puntos registrados en Trivia.")
+    rows = []
+    for uid, data in stats.items():
+        pts = data.get("points", 0)
+        name = data.get("name", f"ID {uid}")
+        rows.append((pts, name, uid))
+    rows.sort(key=lambda x: x[0], reverse=True)
+    top = rows[:10]
+    lines = ["🏆 <b>TOP 10 — Trivia</b>\n"]
+    for i, (pts, name, uid) in enumerate(top, start=1):
+        mention = f'<a href="tg://user?id={uid}">{name}</a>'
+        lines.append(f"{i}. {mention} — <b>{pts}</b> puntos")
+    await msg.reply_text("\n".join(lines), parse_mode="HTML")
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.from_user or not msg.text:
@@ -1367,6 +1385,13 @@ def load_trivia_stats() -> dict:
     return _load_json_file(TRIVIA_STATS_FILE, {})
 def save_trivia_stats(stats: dict) -> None:
     _save_json_file(TRIVIA_STATS_FILE, stats)
+def trivia_add_point(chat_id: int, user_id: int, name: str):
+    stats = load_trivia_stats()
+    chat_stats = stats.setdefault(str(chat_id), {})
+    entry = chat_stats.setdefault(str(user_id), {"name": name, "points": 0})
+    entry["name"] = name
+    entry["points"] += 1
+    save_trivia_stats(stats)
 def log_admin_action(action: str, admin_id: int, detail: dict) -> None:
     log = _load_json_file(TRIVIA_ADMIN_LOG_FILE, {"entries": []})
     if "entries" not in log or not isinstance(log["entries"], list):
@@ -1693,6 +1718,7 @@ async def trivia_poll_answer_handler(update: Update, context: ContextTypes.DEFAU
         state[poll_id] = info
         save_trivia_state(state)
         chat_id = info.get("chat_id")
+        trivia_add_point(chat_id, user_id, pa.user.full_name)
         message_id_poll = info.get("message_id_poll")
         try:
             if chat_id and message_id_poll:
@@ -2056,6 +2082,7 @@ def main():
     app.add_handler(CommandHandler("tres", ttt_cmd))
     app.add_handler(CallbackQueryHandler(ttt_router_cb, pattern=r"^ttt:"))
     app.add_handler(CommandHandler("top_ttt", top_ttt_cmd))
+    app.add_handler(CommandHandler("trivia_top", trivia_top_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tiktok_detector), group=1)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message), group=50)
     register_command("start", "muestra el mensaje de bienvenida del bot")
@@ -2074,6 +2101,7 @@ def main():
     register_command("trivia_import", "importa un pool de preguntas desde una URL (merge|replace)", admin=True)
     register_command("trivia_start", "inicia una ronda de trivia en este chat", admin=True)
     register_command("trivia_stop", "detiene la ronda de trivia activa y muestra la respuesta correcta", admin=True)
+    register_command("trivia_top", "muestra el ranking de trivia")
     print("🐸 RuruBot iniciado.")
     app.add_error_handler(error_handler)
     app.run_polling()
