@@ -1736,7 +1736,8 @@ async def trivia_poll_answer_handler(update: Update, context: ContextTypes.DEFAU
             txt = (
                 f"🏆 ¡El ganador ha sido {mention}!\n"
                 f"➡️ Respuesta correcta: <b>{letra}) {correct_text}</b>\n"
-                f"➕ +1 punto 😄"
+                f"➕ +1 punto 😄\n"
+                f"📊 Consulta el TOP con /trivia_top"
             )
             if chat_id:
                 await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
