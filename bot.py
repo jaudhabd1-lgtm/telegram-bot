@@ -1335,24 +1335,24 @@ def _validate_pool_list(raw) -> list[dict]:
     norm: list[dict] = []
     for idx, item in enumerate(raw, start=1):
         if not isinstance(item, dict):
-            raise ValueError(f"Pregunta
+            raise ValueError(f"Pregunta #{idx}: debe ser un objeto JSON válido.")
         q = item.get("question")
         choices = item.get("choices")
         ans = item.get("answer")
         qid = item.get("id")
         if not isinstance(q, str) or not q.strip():
-            raise ValueError(f"Pregunta
+            raise ValueError(f"Pregunta #{idx}: campo 'question' inválido o vacío.")
         if not isinstance(choices, list) or len(choices) < 2:
-            raise ValueError(f"Pregunta
+            raise ValueError(f"Pregunta #{idx}: 'choices' debe ser una lista con mínimo 2 opciones.")
         clean_choices: list[str] = []
         for c in choices:
             if not isinstance(c, str) or not c.strip():
-                raise ValueError(f"Pregunta
+                raise ValueError(f"Pregunta #{idx}: una de las opciones está vacía o no es texto.")
             clean_choices.append(c.strip())
         if not isinstance(ans, int) or not (0 <= ans < len(clean_choices)):
-            raise ValueError(f"Pregunta
+            raise ValueError(f"Pregunta #{idx}: 'answer' debe ser un índice entero válido.")
         if qid is not None and not isinstance(qid, int):
-            raise ValueError(f"Pregunta
+            raise ValueError(f"Pregunta #{idx}: el campo 'id' debe ser un entero o no estar presente.")
         norm.append({
             "id": qid,
             "question": q.strip(),
