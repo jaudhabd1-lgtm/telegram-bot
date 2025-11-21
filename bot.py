@@ -103,7 +103,6 @@ def format_duration(seconds: float) -> str:
     if m:
         parts.append(f"{m}m")
     if not parts:
-        await msg.reply_text("⚠️ Debes escribir el texto que el bot enviará automáticamente.")
         parts.append(f"{s}s")
     return " ".join(parts)
 async def is_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
