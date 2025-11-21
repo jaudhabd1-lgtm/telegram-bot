@@ -4,10 +4,12 @@ from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import (
     ApplicationBuilder,
-    ContextTypes,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
+    PollAnswerHandler,
+    PollHandler,
+    ContextTypes,
     filters
 )
 from typing import List, Dict, Any
@@ -25,9 +27,6 @@ import requests
 import time
 import unicodedata
 
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    CallbackQueryHandler, PollAnswerHandler, PollHandler, ContextTypes, filters
-)
 TOKEN = os.getenv("TOKEN")
 PERSIST_DIR = os.environ.get("PERSIST_DIR", "/data").strip() or "."
 ROSTER_FILE = os.path.join(PERSIST_DIR, "roster.json")
