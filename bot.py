@@ -263,7 +263,7 @@ def _import_list(url: str) -> tuple[int | None, dict[str, dict[str, Any]]]:
     parsed: dict[str, dict[str, Any]] = {}
     for line in content.splitlines():
         line = line.strip()
-        if not line or line.startswith("
+        if not line or line.startswith("#"):
             continue
         m = ROSTER_LINE_RE.match(line)
         if not m:
