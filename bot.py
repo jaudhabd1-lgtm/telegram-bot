@@ -1289,6 +1289,350 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_to_message_id=msg.message_id,
             disable_web_page_preview=True
         )
+
+PPT_GAMES: Dict[int, Dict[int, Dict[str, Any]]] = {}
+
+PPT_ROCK = "🪨"
+PPT_PAPER = "📄"
+PPT_SCISSORS = "✂️"
+
+
+def _ppt_stats_load() -> dict:
+    s = load_settings()
+    return s.setdefault("_ppt_stats", {})
+
+
+def _ppt_stats_save(stats: dict) -> None:
+    s = load_settings()
+    s["_ppt_stats"] = stats
+    save_settings(s)
+
+
+def _ppt_stats_bump(chat_id: int, user_id: int, name: str, key: str):
+    stats = _ppt_stats_load()
+    c = stats.setdefault(str(chat_id), {})
+    u = c.setdefault(str(user_id), {"name": name or f"ID {user_id}", "wins": 0, "losses": 0, "draws": 0})
+    u["name"] = name or u["name"]
+    u[key] = int(u.get(key, 0)) + 1
+    _ppt_stats_save(stats)
+
+
+def _ppt_stats_record(chat_id: int, uid_a: int, name_a: str, uid_b: int, name_b: str, result: str):
+    """
+    result: "a", "b" o "draw"
+    """
+    if result == "a":
+        _ppt_stats_bump(chat_id, uid_a, name_a, "wins")
+        _ppt_stats_bump(chat_id, uid_b, name_b, "losses")
+    elif result == "b":
+        _ppt_stats_bump(chat_id, uid_b, name_b, "wins")
+        _ppt_stats_bump(chat_id, uid_a, name_a, "losses")
+    else:
+        _ppt_stats_bump(chat_id, uid_a, name_a, "draws")
+        _ppt_stats_bump(chat_id, uid_b, name_b, "draws")
+
+
+def _ppt_stats_top(chat_id: int, metric: str = "wins", limit: int = 10) -> str:
+    metric = metric.lower()
+    if metric not in ("wins", "losses", "draws"):
+        metric = "wins"
+    stats = _ppt_stats_load().get(str(chat_id), {})
+    if not stats:
+        return "Aún no hay partidas registradas de Piedra, papel o tijera en este chat."
+    rows = []
+    for uid, rec in stats.items():
+        rows.append((int(rec.get(metric, 0)), rec.get("name", f"ID {uid}"), int(uid)))
+    rows.sort(key=lambda x: x[0], reverse=True)
+    rows = rows[:limit]
+    title_map = {
+        "wins": "🏆 Top victorias",
+        "losses": "💀 Top derrotas",
+        "draws": "🤝 Top empates",
+    }
+    title = title_map.get(metric, "🏆 Top victorias")
+    out = [f"{title} — Piedra, papel o tijera"]
+    for i, (val, name, _uid) in enumerate(rows, start=1):
+        out.append(f"{i}. {name} — {val}")
+    return "\n".join(out)
+
+
+def _ppt_get_game(chat_id: int, msg_id: int) -> Dict[str, Any] | None:
+    return PPT_GAMES.get(chat_id, {}).get(msg_id)
+
+
+def _ppt_set_game(chat_id: int, msg_id: int, data: Dict[str, Any]) -> None:
+    PPT_GAMES.setdefault(chat_id, {})[msg_id] = data
+
+
+def _ppt_del_game(chat_id: int, msg_id: int) -> None:
+    if chat_id in PPT_GAMES and msg_id in PPT_GAMES[chat_id]:
+        del PPT_GAMES[chat_id][msg_id]
+        if not PPT_GAMES[chat_id]:
+            del PPT_GAMES[chat_id]
+
+
+def _ppt_result(choice_a: str, choice_b: str) -> str:
+    """
+    Retorna "a", "b" o "draw".
+    """
+    if choice_a == choice_b:
+        return "draw"
+    wins_over = {
+        "r": "s",
+        "p": "r",
+        "s": "p",
+    }
+    if wins_over.get(choice_a) == choice_b:
+        return "a"
+    return "b"
+
+
+def _ppt_choice_label(code: str) -> str:
+    if code == "r":
+        return PPT_ROCK
+    if code == "p":
+        return PPT_PAPER
+    if code == "s":
+        return PPT_SCISSORS
+    return "?"
+
+
+def _ppt_status_text(state: Dict[str, Any]) -> str:
+    p1_name = state.get("p1_name") or "Jugador 1"
+    p2_name = state.get("p2_name") or "Jugador 2"
+    status = state.get("status", "waiting")
+    if status == "waiting":
+        if state.get("mode") == "open":
+            return f"Piedra, papel o tijera — Esperando oponente…\n{p1_name} ha creado el reto."
+        else:
+            return f"Piedra, papel o tijera — Ronda preparada.\n{p1_name} ha desafiado a {p2_name}."
+    if status == "choosing":
+        return f"Piedra, papel o tijera — Elige tu jugada.\n{p1_name} vs {p2_name}"
+    if status == "finished":
+        return state.get("result_text", "Piedra, papel o tijera — Fin de la ronda.")
+    return "Piedra, papel o tijera"
+
+
+def _ppt_keyboard(chat_id: int, msg_id: int, state: Dict[str, Any]) -> InlineKeyboardMarkup:
+    status = state.get("status", "waiting")
+    rows: list[list[InlineKeyboardButton]] = []
+    if status == "waiting":
+        if state.get("mode") == "open" and not state.get("p2_id"):
+            rows.append([InlineKeyboardButton("Unirme", callback_data=f"ppt:join:{chat_id}:{msg_id}")])
+        rows.append([InlineKeyboardButton("Cancelar", callback_data=f"ppt:cancel:{chat_id}:{msg_id}")])
+    elif status == "choosing":
+        rows.append([
+            InlineKeyboardButton(PPT_ROCK, callback_data=f"ppt:play:{chat_id}:{msg_id}:r"),
+            InlineKeyboardButton(PPT_PAPER, callback_data=f"ppt:play:{chat_id}:{msg_id}:p"),
+            InlineKeyboardButton(PPT_SCISSORS, callback_data=f"ppt:play:{chat_id}:{msg_id}:s"),
+        ])
+        rows.append([InlineKeyboardButton("Cancelar", callback_data=f"ppt:cancel:{chat_id}:{msg_id}")])
+    elif status == "finished":
+        rows.append([InlineKeyboardButton("Revancha", callback_data=f"ppt:rematch:{chat_id}:{msg_id}")])
+    return InlineKeyboardMarkup(rows)
+
+
+async def ppt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /ppt  — inicia una partida de Piedra, papel o tijera.
+    - Si respondes a un mensaje, desafías a ese usuario (modo duelo).
+    - Si pasas @usuario como argumento, duelo directo.
+    - Si no, partida abierta: cualquiera puede unirse.
+    """
+    msg = update.message
+    if not msg:
+        return
+    chat = msg.chat
+    if not is_module_enabled(chat.id, "ppt_enabled"):
+        return await msg.reply_text("🚫 El módulo PPT está desactivado en este chat.")
+    p1 = msg.from_user
+    if msg.chat.type == ChatType.PRIVATE:
+        return await msg.reply_text("Este juego está pensado para grupos.")
+    opponent_id = None
+    opponent_name = None
+    mode = "open"
+    if msg.reply_to_message and msg.reply_to_message.from_user and msg.reply_to_message.from_user.id != p1.id:
+        opponent = msg.reply_to_message.from_user
+        opponent_id = opponent.id
+        opponent_name = opponent.first_name
+        mode = "duel"
+    elif context.args and context.args[0].startswith("@"):
+        username = context.args[0][1:].lower()
+        roster = load_roster().get(str(chat.id), {})
+        uid = None
+        for uid_str, info in roster.items():
+            name = str(info.get("name") or "").strip()
+            if name.startswith("@") and name[1:].lower() == username:
+                uid = int(uid_str)
+                break
+        if uid:
+            member = await context.bot.get_chat_member(chat.id, uid)
+            opponent = member.user
+            if opponent.id == p1.id:
+                return await msg.reply_text("No puedes jugar contra ti mismo 😅")
+            opponent_id = opponent.id
+            opponent_name = opponent.first_name
+            mode = "duel"
+    if opponent_id and opponent_id == p1.id:
+        return await msg.reply_text("No puedes jugar contra ti mismo 😅")
+    state: Dict[str, Any] = {
+        "chat_id": chat.id,
+        "mode": mode,
+        "p1_id": p1.id,
+        "p1_name": p1.first_name,
+        "p2_id": opponent_id,
+        "p2_name": opponent_name,
+        "status": "waiting" if opponent_id is None else "choosing",
+        "choices": {},
+        "created_ts": time.time(),
+    }
+    text = _ppt_status_text(state)
+    sent = await context.bot.send_message(chat_id=chat.id, text=text)
+    _ppt_set_game(chat.id, sent.message_id, state)
+    kb = _ppt_keyboard(chat.id, sent.message_id, state)
+    await sent.edit_text(_ppt_status_text(state), reply_markup=kb)
+
+
+async def ppt_join_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
+    q = update.callback_query
+    user = q.from_user
+    state = _ppt_get_game(chat_id, msg_id)
+    if not state:
+        return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
+    if state.get("status") != "waiting":
+        return await safe_q_answer(q, "Esta partida ya no admite nuevos jugadores.", show_alert=True)
+    if state.get("p1_id") == user.id:
+        return await safe_q_answer(q, "No puedes unirte a tu propia partida como oponente.", show_alert=True)
+    if state.get("p2_id") and state.get("p2_id") != user.id:
+        return await safe_q_answer(q, "Esta partida ya tiene oponente.", show_alert=True)
+    state["p2_id"] = user.id
+    state["p2_name"] = user.first_name
+    state["status"] = "choosing"
+    _ppt_set_game(chat_id, msg_id, state)
+    await safe_q_answer(q, "¡Te has unido a la partida!")
+    await q.edit_message_text(_ppt_status_text(state), reply_markup=_ppt_keyboard(chat_id, msg_id, state))
+
+
+async def ppt_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
+    q = update.callback_query
+    user = q.from_user
+    state = _ppt_get_game(chat_id, msg_id)
+    if not state:
+        return await safe_q_answer(q, "Nada que cancelar.", show_alert=True)
+    owner_id = state.get("p1_id")
+    if user.id != owner_id and not await is_admin(context, chat_id, user.id):
+        return await safe_q_answer(q, "Solo el creador o un administrador puede cancelar.", show_alert=True)
+    _ppt_del_game(chat_id, msg_id)
+    await safe_q_answer(q)
+    await q.edit_message_text("❌ Partida de Piedra, papel o tijera cancelada.")
+
+
+async def ppt_play_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int, choice_code: str):
+    q = update.callback_query
+    user = q.from_user
+    state = _ppt_get_game(chat_id, msg_id)
+    if not state:
+        return await safe_q_answer(q, "Partida no encontrada.", show_alert=True)
+    if state.get("status") != "choosing":
+        return await safe_q_answer(q, "Esta partida ya ha terminado o no está disponible.", show_alert=True)
+    p1_id = state.get("p1_id")
+    p2_id = state.get("p2_id")
+    if user.id not in (p1_id, p2_id):
+        return await safe_q_answer(q, "No estás participando en esta partida.", show_alert=True)
+    if choice_code not in ("r", "p", "s"):
+        return await safe_q_answer(q, "Jugada inválida.", show_alert=True)
+    choices = state.get("choices") or {}
+    if str(user.id) in choices:
+        return await safe_q_answer(q, "Ya has elegido tu jugada.", show_alert=True)
+    choices[str(user.id)] = choice_code
+    state["choices"] = choices
+    _ppt_set_game(chat_id, msg_id, state)
+    await safe_q_answer(q, "Jugada registrada.")
+    if p1_id and p2_id and str(p1_id) in choices and str(p2_id) in choices:
+        c1 = choices[str(p1_id)]
+        c2 = choices[str(p2_id)]
+        res = _ppt_result(c1, c2)
+        p1_name = state.get("p1_name") or "Jugador 1"
+        p2_name = state.get("p2_name") or "Jugador 2"
+        label1 = _ppt_choice_label(c1)
+        label2 = _ppt_choice_label(c2)
+        if res == "draw":
+            result_text = f"Piedra, papel o tijera — Empate.\n{p1_name}: {label1}\n{p2_name}: {label2}"
+        elif res == "a":
+            result_text = f"Piedra, papel o tijera — ¡{p1_name} ha ganado!\n{p1_name}: {label1}\n{p2_name}: {label2}"
+        else:
+            result_text = f"Piedra, papel o tijera — ¡{p2_name} ha ganado!\n{p1_name}: {label1}\n{p2_name}: {label2}"
+        state["status"] = "finished"
+        state["result_text"] = result_text
+        _ppt_set_game(chat_id, msg_id, state)
+        if p1_id and p2_id:
+            _ppt_stats_record(chat_id, p1_id, p1_name, p2_id, p2_name, res)
+        await q.edit_message_text(result_text, reply_markup=_ppt_keyboard(chat_id, msg_id, state))
+
+
+async def ppt_rematch_cb(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, msg_id: int):
+    q = update.callback_query
+    user = q.from_user
+    old = _ppt_get_game(chat_id, msg_id)
+    if not old:
+        return await safe_q_answer(q, "No hay partida para reiniciar.", show_alert=True)
+    if user.id not in (old.get("p1_id"), old.get("p2_id")) and not await is_admin(context, chat_id, user.id):
+        return await safe_q_answer(q, "Solo un participante o un administrador puede pedir revancha.", show_alert=True)
+    new_state: Dict[str, Any] = {
+        "chat_id": chat_id,
+        "mode": old.get("mode", "duel"),
+        "p1_id": old.get("p1_id"),
+        "p1_name": old.get("p1_name"),
+        "p2_id": old.get("p2_id"),
+        "p2_name": old.get("p2_name"),
+        "status": "choosing" if old.get("p2_id") else "waiting",
+        "choices": {},
+        "created_ts": time.time(),
+    }
+    _ppt_set_game(chat_id, msg_id, new_state)
+    await safe_q_answer(q, "¡Nueva ronda!")
+    await q.edit_message_text(_ppt_status_text(new_state), reply_markup=_ppt_keyboard(chat_id, msg_id, new_state))
+
+
+async def ppt_router_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    data = q.data or ""
+    try:
+        parts = data.split(":")
+        if parts[0] != "ppt":
+            return await safe_q_answer(q)
+        action = parts[1]
+        chat_id = int(parts[2])
+        msg_id = int(parts[3])
+        if not is_module_enabled(chat_id, "ppt_enabled"):
+            return await safe_q_answer(q, "🚫 El módulo PPT está desactivado en este chat.", show_alert=True)
+        if action == "join":
+            return await ppt_join_cb(update, context, chat_id, msg_id)
+        if action == "cancel":
+            return await ppt_cancel_cb(update, context, chat_id, msg_id)
+        if action == "play":
+            choice_code = parts[4]
+            return await ppt_play_cb(update, context, chat_id, msg_id, choice_code)
+        if action == "rematch":
+            return await ppt_rematch_cb(update, context, chat_id, msg_id)
+        return await safe_q_answer(q)
+    except Exception:
+        logging.exception("ppt router error")
+        try:
+            await safe_q_answer(q, "❌ Error en la jugada.", show_alert=True)
+        except Exception:
+            pass
+
+
+async def ppt_top_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /ppt_top [wins|losses|draws]
+    Muestra el ranking del chat para Piedra, papel o tijera.
+    """
+    msg = update.message
+    metric = (context.args[0].lower() if context.args else "wins")
+    await context.bot.send_message(chat_id=msg.chat.id, text=_ppt_stats_top(msg.chat.id, metric))
+
 TRIVIA_POOL_FILE = os.path.join(PERSIST_DIR, "pool.json")
 TRIVIA_STATE_FILE = os.path.join(PERSIST_DIR, "trivia_state.json")
 TRIVIA_STATS_FILE = os.path.join(PERSIST_DIR, "trivia_stats.json")
@@ -1825,6 +2169,7 @@ MODULES: Dict[str, Dict[str, str]] = {
     "admin": {"key": "admin_enabled", "label": "@admin"},
     "autoresp": {"key": "autoresponder_enabled", "label": "Autoresponder"},
     "ttt": {"key": "ttt_enabled", "label": "TTT"},
+    "ppt": {"key": "ppt_enabled", "label": "PPT"},
     "trivia": {"key": "trivia_enabled", "label": "Trivia"},
     "namechg": {"key": "notify_name_change", "label": "SangMata"},
 }
@@ -1834,6 +2179,7 @@ DEFAULTS: Dict[str, bool] = {
     "admin_enabled": True,
     "autoresponder_enabled": True,
     "ttt_enabled": True,
+    "ppt_enabled": True,
     "trivia_enabled": False,
     "notify_name_change": False,
 }
@@ -1965,11 +2311,12 @@ HUB_MODULES = {
     "admin": {"title": "@admin", "desc": "Avisa solo al equipo de administradores.", "cmds": ["@admin [motivo]"]},
     "autoresp": {"title": "Autoresponder", "desc": "Respuestas automáticas personalizadas por usuario.", "cmds": ["autoresponder", "autoresponder_off"]},
     "ttt": {"title": "Tres en raya", "desc": "Juega partidas de TTT con el grupo y consulta clasificaciones.", "cmds": ["ttt", "top_ttt"]},
+    "ppt": {"title": "Piedra, papel o tijera", "desc": "Duelo rápido 1v1 con ranking propio.", "cmds": ["ppt", "ppt_top"]},
     "trivia": {"title": "Trivia", "desc": "Juego de preguntas programado cada hora (desde 00:30).", "cmds": ["trivia_on", "trivia_off", "trivia_stats"]},
     "namechg": {"title": "SangMata", "desc": "Notifica cambios de nombre y @ cuando la persona habla en el grupo.", "cmds": []},
 }
 def build_hub_keyboard() -> InlineKeyboardMarkup:
-    codes = ["afk", "all", "admin", "autoresp", "ttt", "trivia", "namechg"]
+    codes = ["afk", "all", "admin", "autoresp", "ttt", "ppt", "trivia", "namechg"]
     rows = []
     for i in range(0, len(codes), 2):
         chunk = codes[i:i + 2]
@@ -2088,6 +2435,9 @@ def main():
     app.add_handler(CommandHandler("tres", ttt_cmd))
     app.add_handler(CallbackQueryHandler(ttt_router_cb, pattern=r"^ttt:"))
     app.add_handler(CommandHandler("top_ttt", top_ttt_cmd))
+    app.add_handler(CommandHandler("ppt", ppt_cmd))
+    app.add_handler(CommandHandler("ppt_top", ppt_top_cmd))
+    app.add_handler(CallbackQueryHandler(ppt_router_cb, pattern=r"^ppt:"))
     app.add_handler(CommandHandler("trivia_top", trivia_top_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, tiktok_detector), group=1)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message), group=50)
@@ -2104,6 +2454,8 @@ def main():
     register_command("ttt", "inicia una partida de tres en raya (responde a alguien o usa @usuario opcionalmente)")
     register_command("tres", "alias de /ttt para iniciar tres en raya")
     register_command("top_ttt", "muestra el ranking de tres en raya (wins/draws/losses)")
+    register_command("ppt", "inicia una partida de piedra, papel o tijera (responde a alguien o usa @usuario opcionalmente)")
+    register_command("ppt_top", "muestra el ranking de piedra, papel o tijera (wins/losses/draws)")
     register_command("trivia_import", "importa un pool de preguntas desde una URL (merge|replace)", admin=True)
     register_command("trivia_start", "inicia una ronda de trivia en este chat", admin=True)
     register_command("trivia_stop", "detiene la ronda de trivia activa y muestra la respuesta correcta", admin=True)
