@@ -415,8 +415,7 @@ def txt_admin_confirm() -> str:
 def txt_calling_admins() -> str:
     return "Avisando a administradores…"
 def txt_autoresp_usage() -> str:
-    return "ℹ️ Uso correcto: /autoresponder @usuario <texto>
-También puedes responder a un mensaje y usar /autoresponder <texto>."
+    return "ℹ️ Uso correcto: /autoresponder @usuario <texto>. También puedes responder a un mensaje y usar /autoresponder <texto>."
 def txt_autoresp_reply_usage() -> str:
     return "ℹ️ Uso: /autoresponder <texto>"
 def txt_autoresp_not_found() -> str:
