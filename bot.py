@@ -1717,6 +1717,8 @@ async def trivia_poll_answer_handler(update: Update, context: ContextTypes.DEFAU
         info["finished"] = True
         state[poll_id] = info
         save_trivia_state(state)
+        del state[poll_id]
+        save_trivia_state(state)
         chat_id = info.get("chat_id")
         trivia_add_point(chat_id, user_id, pa.user.full_name)
         message_id_poll = info.get("message_id_poll")
@@ -1762,6 +1764,8 @@ async def trivia_poll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     info["finished"] = True
     state[poll_id] = info
+    save_trivia_state(state)
+    del state[poll_id]
     save_trivia_state(state)
     snapshot = info.get("question_snapshot") or {}
     correct_index = snapshot.get("answer")
