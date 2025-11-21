@@ -2058,10 +2058,11 @@ async def trivia_poll_answer_handler(update: Update, context: ContextTypes.DEFAU
                 correct_text = choices[correct_index]
             letra = chr(ord("A") + correct_index) if isinstance(correct_index, int) else "?"
             mention = f'<a href="tg://user?id={user_id}">{html.escape(pa.user.full_name)}</a>'
-            txt = f"¡El ganador ha sido {mention}!\\n"
-            if correct_text is not None:
-                txt += f"La respuesta correcta era {letra}) {correct_text}.\\n"
-            txt += "+1 punto simbólico. 😄"
+            txt = (
+                f"🏆 ¡El ganador ha sido {mention}!\n"
+                f"➡️ Respuesta correcta: <b>{letra}) {correct_text}</b>\n"
+                f"➕ +1 punto 😄"
+            )
             if chat_id:
                 await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
         except Exception:
@@ -2109,8 +2110,13 @@ async def trivia_poll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"No ha habido ningún ganador.\nLa respuesta correcta era {letra}) {correct_text}.",
+                text=(
+                    "❌ No ha habido ningún ganador.\n"
+                    f"➡️ Respuesta correcta: <b>{letra}) {correct_text}</b>"
+                ),
+                parse_mode="HTML"
             )
+                
         except Exception:
             logging.exception("Error anunciando respuesta correcta sin ganador")
 
