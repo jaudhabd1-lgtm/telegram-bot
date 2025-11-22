@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatType
 from telegram.error import BadRequest
@@ -1931,7 +1931,26 @@ async def _start_trivia_round(context: ContextTypes.DEFAULT_TYPE, chat_id: int, 
         else:
             logging.info("Trivia automática omitida en %s: pool vacío.", chat_id)
         return
-    pregunta = random.choice(valid)
+
+    state = load_trivia_state()
+    state = _cleanup_stale_trivia_rounds(context, state)
+    history = state.setdefault("_history", {})
+    chat_history: list[str] = history.get(str(chat_id), []) if isinstance(history, dict) else []
+
+    def _qid(qdata: dict) -> str:
+        qid = qdata.get("id")
+        if qid is not None:
+            return f"id:{qid}"
+        return f"q:{qdata.get('question')}"
+
+    used_keys = set(chat_history)
+    available = [q for q in valid if _qid(q) not in used_keys]
+    if not available:
+        chat_history = []
+        used_keys = set()
+        available = valid
+
+    pregunta = random.choice(available)
     question_text = pregunta["question"]
     choices = pregunta["choices"]
     correct_index = int(pregunta["answer"])
@@ -1955,7 +1974,6 @@ async def _start_trivia_round(context: ContextTypes.DEFAULT_TYPE, chat_id: int, 
         logging.exception("❌ Error enviando poll de trivia")
         return
     poll_id = poll_msg.poll.id
-    state = load_trivia_state()
     state[str(poll_id)] = {
         "chat_id": chat_id,
         "message_id_poll": poll_msg.message_id,
@@ -1971,6 +1989,10 @@ async def _start_trivia_round(context: ContextTypes.DEFAULT_TYPE, chat_id: int, 
             "answer": correct_index,
         },
     }
+    if isinstance(history, dict):
+        chat_history.append(_qid(pregunta))
+        history[str(chat_id)] = chat_history
+        state["_history"] = history
     save_trivia_state(state)
 async def trivia_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin: inicia una ronda de trivia en este chat."""
@@ -2131,10 +2153,58 @@ async def trivia_poll_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         except Exception:
             logging.exception("❌ Error anunciando respuesta correcta sin ganador")
+def _cleanup_stale_trivia_rounds(context: ContextTypes.DEFAULT_TYPE, state: dict) -> dict:
+    """Marca como finalizadas las rondas que ya deberían haber cerrado."""
+
+    now = datetime.utcnow()
+    stale_keys: list[str] = []
+    for pid, info in list(state.items()):
+        if not isinstance(info, dict):
+            continue
+        if info.get("finished"):
+            continue
+        started_at = info.get("started_at")
+        try:
+            started_dt = datetime.fromisoformat(started_at) if isinstance(started_at, str) else None
+        except ValueError:
+            started_dt = None
+        if started_dt and now - started_dt > timedelta(minutes=6):
+            info["finished"] = True
+            state[pid] = info
+            stale_keys.append(pid)
+            snapshot = info.get("question_snapshot") or {}
+            choices = snapshot.get("choices") or []
+            correct_index = snapshot.get("answer")
+            correct_text = None
+            if isinstance(correct_index, int) and 0 <= correct_index < len(choices):
+                correct_text = choices[correct_index]
+            chat_id = info.get("chat_id")
+            letra = chr(ord("A") + correct_index) if isinstance(correct_index, int) else "?"
+            try:
+                if chat_id and correct_text is not None:
+                    asyncio.create_task(
+                        context.bot.send_message(
+                            chat_id=chat_id,
+                            text=(
+                                "⏰ La ronda de trivia anterior finalizó sin ganador.\n"
+                                f"➡️ Respuesta correcta: <b>{letra}) {correct_text}</b>"
+                            ),
+                            parse_mode="HTML",
+                        )
+                    )
+            except Exception:
+                logging.exception("❌ Error anunciando cierre automático de trivia")
+
+    if stale_keys:
+        for k in stale_keys:
+            state.pop(k, None)
+        save_trivia_state(state)
+    return state
 async def scheduled_trivia_job(context: ContextTypes.DEFAULT_TYPE):
     """Job que intenta lanzar una trivia automática en cada chat con trivia_enabled."""
     roster = load_roster()
     state = load_trivia_state()
+    state = _cleanup_stale_trivia_rounds(context, state)
     activos_por_chat: dict[int, bool] = {}
     for info in state.values():
         if not isinstance(info, dict):
